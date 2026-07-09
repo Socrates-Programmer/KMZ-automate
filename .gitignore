@@ -1,0 +1,37 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local env files
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Flask/local runtime
+instance/
+
+# Generated KMZ corrector files
+uploads/
+outputs/
+sample_output*/
+*.kmz
+*.kml
+*.xlsx
+*.zip
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/

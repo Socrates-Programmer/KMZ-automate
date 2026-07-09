@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Corrector KMZ de rutas escolares</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <h1>Corrector KMZ</h1>
+        <p class="lead">Sube un KMZ de rutas escolares y descarga el paquete corregido para revisarlo en Google Earth Pro.</p>
+
+        {% if error %}
+          <div class="alert">{{ error }}</div>
+        {% endif %}
+
+        <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data">
+          <label>
+            Archivo KMZ
+            <input type="file" name="kmz_file" accept=".kmz" required>
+          </label>
+
+          <button type="submit">Procesar KMZ</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>
