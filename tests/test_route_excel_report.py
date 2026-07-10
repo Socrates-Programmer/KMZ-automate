@@ -3,6 +3,8 @@ import zipfile
 import xml.etree.ElementTree as ET
 
 from kmz_route_corrector.core import make_bundle
+from kmz_route_corrector.irregularity_report import write_irregularities_pdf
+from kmz_route_corrector.models import Irregularity
 from kmz_route_corrector.models import CorrectedStop, Route, RouteCorrection
 from kmz_route_corrector.report import (
     ROUTE_EXCEL_TEMPLATE_STOPS,
@@ -322,13 +324,36 @@ def test_write_route_flow_report_exports_linestring_order(tmp_path):
     assert float(rows[1]["distancia_acumulada_metros"]) > 0
 
 
+def test_irregularities_pdf_is_generated(tmp_path):
+    path = tmp_path / "reporte_irregularidades.pdf"
+    write_irregularities_pdf(
+        path,
+        [
+            Irregularity(
+                route_name="Ruta #1",
+                kind="route_gap",
+                title="Tramo largo sin paradas",
+                description="Tramo de prueba sin paradas.",
+                lon=-69.1,
+                lat=18.0,
+                line_coords=[(-69.2, 18.0, None), (-69.0, 18.0, None)],
+                points=[("P1", -69.2, 18.0), ("P2", -69.0, 18.0)],
+                distance_meters=2000,
+            )
+        ],
+    )
+
+    assert path.read_bytes().startswith(b"%PDF-1.4")
+
+
 def test_bundle_includes_route_excels(tmp_path):
     kmz_path = tmp_path / "rutas_corregido.kmz"
     report_path = tmp_path / "reporte_correccion_rutas.csv"
     flow_path = tmp_path / "recorrido_ruta.csv"
+    irregularities_path = tmp_path / "reporte_irregularidades.pdf"
     warnings_path = tmp_path / "warnings.log"
     excel_path = tmp_path / "excel_rutas" / "Rutas 05-11" / "001_Ruta #2.xlsx"
-    for path in [kmz_path, report_path, flow_path, warnings_path, excel_path]:
+    for path in [kmz_path, report_path, flow_path, irregularities_path, warnings_path, excel_path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"data")
 
@@ -339,6 +364,7 @@ def test_bundle_includes_route_excels(tmp_path):
         warnings_path,
         [excel_path],
         route_flow_path=flow_path,
+        irregularities_report_path=irregularities_path,
     )
 
     with zipfile.ZipFile(bundle_path) as archive:
@@ -346,6 +372,7 @@ def test_bundle_includes_route_excels(tmp_path):
             "excel_rutas/Rutas 05-11/001_Ruta #2.xlsx",
             "recorrido_ruta.csv",
             "reporte_correccion_rutas.csv",
+            "reporte_irregularidades.pdf",
             "rutas_corregido.kmz",
             "warnings.log",
         ]

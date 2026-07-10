@@ -44,6 +44,7 @@ Sube cualquier archivo `.kmz` y descarga el ZIP generado. El ZIP incluye:
 - KMZ corregido.
 - `reporte_correccion_rutas.csv`.
 - `recorrido_ruta.csv` con las coordenadas del flujo de cada ruta segun el `LineString` usado por el perfil de elevacion.
+- `reporte_irregularidades.pdf` con capturas esquematicas de irregularidades detectadas.
 - Carpeta `excel_rutas/Rutas <Distrito>/` con una plantilla Excel por ruta corregida.
 - `warnings.log`.
 
@@ -134,6 +135,17 @@ Para calcularlo, la herramienta proyecta cada parada sobre el trayecto y la colo
 El archivo `recorrido_ruta.csv` exporta el flujo del `LineString` de cada ruta en el mismo orden usado por Google Earth para el Elevation Profile. Incluye distrito, ruta, indice de vertice, latitud, longitud, altitud, distancia del segmento y distancia acumulada.
 
 Antes de renumerar, las paradas consecutivas que caen practicamente en el mismo punto o en el mismo tramo junto al mismo centro educativo se consolidan en una sola parada. Esto evita salidas como `P1` y `P2` duplicadas frente al mismo instituto.
+
+## Reporte de irregularidades
+
+El ZIP incluye `reporte_irregularidades.pdf`. El PDF se genera siempre; si no hay hallazgos, lo indica en una pagina de resumen.
+
+El reporte mide:
+
+- Paradas eliminadas/consolidadas que estaban a mas de `150 m` de la linea de ruta.
+- Tramos largos de ruta sin paradas, usando un umbral de `1500 m` entre inicio/paradas/fin de ruta.
+
+Cada hallazgo incluye una captura esquematica con la linea de ruta y el punto o tramo asociado a la irregularidad. Estas capturas no son imagenes satelitales; son diagramas generados desde la geometria del KMZ para ubicar el problema rapidamente.
 
 ## Deteccion de rutas, paradas y escuelas
 

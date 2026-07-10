@@ -5,11 +5,19 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
-from .geometry import distance_along_line_meters, haversine_meters, place_stop_on_route_side
+from .geometry import (
+    distance_along_line_meters,
+    distance_to_line_meters,
+    haversine_meters,
+    line_length_meters,
+    place_stop_on_route_side,
+    point_at_distance_along_line,
+)
 from .google_places import GooglePlacesSchoolLookup
+from .irregularity_report import write_irregularities_pdf
 from .kml_writer import apply_corrections
 from .kmz_io import make_output_paths, read_kmz, write_kml, write_kmz
-from .models import CorrectedStop, ProcessResult, Route, RouteCorrection, School, SchoolMatch, Stop, Summary
+from .models import CorrectedStop, Irregularity, ProcessResult, Route, RouteCorrection, School, SchoolMatch, Stop, Summary
 from .osm_overpass import OpenStreetMapSchoolLookup
 from .report import (
     ROUTE_EXCEL_TEMPLATE_BULK,
@@ -28,6 +36,8 @@ from .stop_detector import order_stops
 NEAR_CONSECUTIVE_STOP_METERS = 60.0
 SAME_SCHOOL_DUPLICATE_STOP_METERS = 90.0
 REPEATED_SCHOOL_LABEL_METERS = 150.0
+FAR_REMOVED_STOP_ROUTE_METERS = 150.0
+LONG_ROUTE_WITHOUT_STOPS_METERS = 1500.0
 MIN_ROUTE_OFFSET_METERS = 10.0
 DEFAULT_ROUTE_OFFSET_METERS = 10.0
 DEFAULT_SCHOOL_RADIUS_METERS = 100.0
@@ -63,6 +73,7 @@ def process_kmz(
 
     kmz_path, kml_path, report_path, warnings_path = make_output_paths(input_file, output_path, output_dir)
     route_flow_path = report_path.parent / "recorrido_ruta.csv"
+    irregularities_report_path = report_path.parent / "reporte_irregularidades.pdf"
     package = read_kmz(input_file)
     warnings = list(package.warnings)
 
@@ -76,6 +87,7 @@ def process_kmz(
 
     corrections: list[RouteCorrection] = []
     all_corrected_stops: list[CorrectedStop] = []
+    all_irregularities: list[Irregularity] = []
 
     for route in routes:
         correction = correct_route(
@@ -87,6 +99,7 @@ def process_kmz(
         )
         corrections.append(correction)
         all_corrected_stops.extend(correction.stops)
+        all_irregularities.extend(correction.irregularities)
         for warning in correction.warnings:
             warnings.append(f"{route.name}: {warning}")
     for lookup in external_lookups:
@@ -97,6 +110,7 @@ def process_kmz(
     write_kmz(package.root, kmz_path, package.primary_kml_name, package.original_entries)
     write_report(report_path, all_corrected_stops)
     write_route_flow_report(route_flow_path, corrections)
+    write_irregularities_pdf(irregularities_report_path, all_irregularities)
     route_excel_template = normalize_route_excel_template(route_excel_template, route_template_path)
     bulk_trip_settings = None
     if route_excel_template == ROUTE_EXCEL_TEMPLATE_BULK:
@@ -130,8 +144,9 @@ def process_kmz(
         warnings_path,
         route_excel_paths,
         route_flow_path=route_flow_path,
+        irregularities_report_path=irregularities_report_path,
     ) if create_bundle else None
-    summary = build_summary(routes, schools, all_corrected_stops, warnings)
+    summary = build_summary(routes, schools, all_corrected_stops, warnings, all_irregularities)
 
     return ProcessResult(
         input_path=input_file,
@@ -139,6 +154,7 @@ def process_kmz(
         output_kml_path=kml_path,
         report_csv_path=report_path,
         route_flow_csv_path=route_flow_path,
+        irregularities_report_pdf_path=irregularities_report_path,
         warnings_log_path=warnings_path,
         route_excel_paths=route_excel_paths,
         bundle_zip_path=bundle_path,
@@ -215,13 +231,22 @@ def correct_route(
     ordered_stops, ordering_method, ordering_warnings = order_stops(route)
     route_warnings = [*route.warnings, *ordering_warnings]
     corrected: list[CorrectedStop] = []
+    irregularities: list[Irregularity] = []
     labeled_school_positions: list[tuple[str, float, float]] = []
     outbound_school_labels: list[tuple[str, float | None, str]] = []
 
     if not ordered_stops:
-        return RouteCorrection(route=route, ordering_method=ordering_method, stops=[], warnings=route_warnings)
+        irregularities.extend(find_route_gap_irregularities(route, []))
+        return RouteCorrection(
+            route=route,
+            ordering_method=ordering_method,
+            stops=[],
+            warnings=route_warnings,
+            irregularities=irregularities,
+        )
 
-    ordered_stops, dedupe_warnings = dedupe_ordered_stops(
+    ordered_stops, dedupe_warnings, dedupe_irregularities = dedupe_ordered_stops(
+        route.name,
         ordered_stops,
         route.line_coords,
         schools,
@@ -229,6 +254,8 @@ def correct_route(
         offset_meters,
     )
     route_warnings.extend(dedupe_warnings)
+    irregularities.extend(dedupe_irregularities)
+    irregularities.extend(find_route_gap_irregularities(route, ordered_stops))
 
     for idx, stop in enumerate(ordered_stops, start=1):
         base_name = f"P{idx}"
@@ -304,19 +331,27 @@ def correct_route(
         )
         corrected.append(corrected_stop)
 
-    return RouteCorrection(route=route, ordering_method=ordering_method, stops=corrected, warnings=route_warnings)
+    return RouteCorrection(
+        route=route,
+        ordering_method=ordering_method,
+        stops=corrected,
+        warnings=route_warnings,
+        irregularities=irregularities,
+    )
 
 
 def dedupe_ordered_stops(
+    route_name: str,
     ordered_stops: list[Stop],
     line_coords,
     schools: list[School],
     school_radius_meters: float,
     offset_meters: float,
-) -> tuple[list[Stop], list[str]]:
+) -> tuple[list[Stop], list[str], list[Irregularity]]:
     kept: list[Stop] = []
     kept_meta: list[dict] = []
     warnings: list[str] = []
+    irregularities: list[Irregularity] = []
 
     for index, stop in enumerate(ordered_stops):
         meta = stop_dedupe_meta(stop, line_coords, ordered_stops, index, schools, school_radius_meters, offset_meters)
@@ -326,11 +361,117 @@ def dedupe_ordered_stops(
                 f"Parada duplicada consolidada cerca de {school_name}: "
                 f"{stop.name or '(sin nombre)'} se unio a {kept[-1].name or '(sin nombre)'}."
             )
+            irregularity = removed_stop_irregularity(route_name, stop, kept[-1], line_coords, meta)
+            if irregularity:
+                irregularities.append(irregularity)
             continue
         kept.append(stop)
         kept_meta.append(meta)
 
-    return kept, warnings
+    return kept, warnings, irregularities
+
+
+def removed_stop_irregularity(
+    route_name: str,
+    removed_stop: Stop,
+    kept_stop: Stop,
+    line_coords,
+    meta: dict,
+) -> Irregularity | None:
+    distance_meters = meta.get("route_distance")
+    if distance_meters is None or distance_meters <= FAR_REMOVED_STOP_ROUTE_METERS:
+        return None
+    return Irregularity(
+        route_name=route_name,
+        kind="removed_far_stop",
+        title="Parada eliminada lejos de la ruta",
+        description=(
+            f"La parada {removed_stop.name or '(sin nombre)'} fue consolidada con "
+            f"{kept_stop.name or '(sin nombre)'}, pero estaba a {distance_meters:.1f} m "
+            f"de la linea de ruta. Umbral: {FAR_REMOVED_STOP_ROUTE_METERS:.0f} m."
+        ),
+        lon=removed_stop.lon,
+        lat=removed_stop.lat,
+        line_coords=list(line_coords or []),
+        points=[
+            ("Eliminada", removed_stop.lon, removed_stop.lat),
+            ("Conservada", kept_stop.lon, kept_stop.lat),
+        ],
+        distance_meters=distance_meters,
+    )
+
+
+def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> list[Irregularity]:
+    route_length = line_length_meters(route.line_coords)
+    if route_length <= LONG_ROUTE_WITHOUT_STOPS_METERS:
+        return []
+
+    if not ordered_stops:
+        midpoint = point_at_distance_along_line(route.line_coords, route_length / 2)
+        if midpoint is None:
+            return []
+        lon, lat = midpoint
+        return [
+            Irregularity(
+                route_name=route.name,
+                kind="route_gap",
+                title="Ruta sin paradas detectadas",
+                description=(
+                    f"La ruta mide {route_length:.1f} m y no tiene paradas detectadas. "
+                    f"Umbral de tramo sin paradas: {LONG_ROUTE_WITHOUT_STOPS_METERS:.0f} m."
+                ),
+                lon=lon,
+                lat=lat,
+                line_coords=list(route.line_coords),
+                points=[("Ruta", lon, lat)],
+                distance_meters=route_length,
+            )
+        ]
+
+    ranked: list[tuple[float, Stop]] = []
+    for stop in ordered_stops:
+        station = distance_along_line_meters(stop.lon, stop.lat, route.line_coords)
+        if station is not None:
+            ranked.append((station, stop))
+    if not ranked:
+        return []
+
+    ranked.sort(key=lambda item: item[0])
+    anchors: list[tuple[float, str, float, float]] = [(0.0, "Inicio ruta", route.line_coords[0][0], route.line_coords[0][1])]
+    anchors.extend((station, stop.name or "Parada", stop.lon, stop.lat) for station, stop in ranked)
+    anchors.append((route_length, "Fin ruta", route.line_coords[-1][0], route.line_coords[-1][1]))
+
+    irregularities: list[Irregularity] = []
+    for previous, current in zip(anchors, anchors[1:]):
+        previous_station, previous_label, previous_lon, previous_lat = previous
+        current_station, current_label, current_lon, current_lat = current
+        gap = current_station - previous_station
+        if gap <= LONG_ROUTE_WITHOUT_STOPS_METERS:
+            continue
+        midpoint = point_at_distance_along_line(route.line_coords, previous_station + gap / 2)
+        if midpoint is None:
+            continue
+        lon, lat = midpoint
+        irregularities.append(
+            Irregularity(
+                route_name=route.name,
+                kind="route_gap",
+                title="Tramo largo sin paradas",
+                description=(
+                    f"Hay {gap:.1f} m de recorrido sin paradas entre {previous_label} y {current_label}. "
+                    f"Umbral: {LONG_ROUTE_WITHOUT_STOPS_METERS:.0f} m."
+                ),
+                lon=lon,
+                lat=lat,
+                line_coords=list(route.line_coords),
+                points=[
+                    (previous_label, previous_lon, previous_lat),
+                    (current_label, current_lon, current_lat),
+                ],
+                distance_meters=gap,
+            )
+        )
+    return irregularities
 
 
 def stop_dedupe_meta(
@@ -358,6 +499,7 @@ def stop_dedupe_meta(
         "placed_lon": placed_lon,
         "placed_lat": placed_lat,
         "station": distance_along_line_meters(stop.lon, stop.lat, line_coords),
+        "route_distance": distance_to_line_meters(stop.lon, stop.lat, line_coords),
         "school": match.school if match and match.school else None,
     }
 
@@ -489,7 +631,13 @@ def repeated_school_label(
     return False
 
 
-def build_summary(routes: list[Route], schools, stops: list[CorrectedStop], warnings: list[str]) -> Summary:
+def build_summary(
+    routes: list[Route],
+    schools,
+    stops: list[CorrectedStop],
+    warnings: list[str],
+    irregularities: list[Irregularity],
+) -> Summary:
     return Summary(
         routes_processed=len(routes),
         original_stops_detected=sum(len(route.stops) for route in routes),
@@ -497,6 +645,7 @@ def build_summary(routes: list[Route], schools, stops: list[CorrectedStop], warn
         pf_stops_created=0,
         schools_detected=len(schools),
         stops_with_school=sum(1 for stop in stops if stop.school_name),
+        irregularities_count=len(irregularities),
         warnings_count=len(warnings) + sum(len(stop.warnings) for stop in stops),
     )
 
@@ -508,10 +657,11 @@ def make_bundle(
     warnings_path: Path,
     route_excel_paths: list[Path] | None = None,
     route_flow_path: Path | None = None,
+    irregularities_report_path: Path | None = None,
 ) -> Path:
     bundle_path = kmz_path.with_name(f"{kmz_path.stem}_resultados.zip")
     with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in [kmz_path, report_path, route_flow_path, warnings_path]:
+        for path in [kmz_path, report_path, route_flow_path, irregularities_report_path, warnings_path]:
             if path and path.exists():
                 archive.write(path, arcname=path.name)
         for path in route_excel_paths or []:
@@ -536,6 +686,7 @@ def print_summary(result: ProcessResult) -> None:
     print(f"Centros educativos detectados: {summary.schools_detected}")
     print(f"Paradas con centro educativo asignado: {summary.stops_with_school}")
     print(f"Excel por ruta generados: {len(result.route_excel_paths)}")
+    print(f"Irregularidades detectadas: {summary.irregularities_count}")
     print(f"Advertencias: {summary.warnings_count}")
     print()
     print("KMZ generado:")
@@ -543,3 +694,6 @@ def print_summary(result: ProcessResult) -> None:
     print()
     print("Recorrido de rutas:")
     print(result.route_flow_csv_path)
+    print()
+    print("Reporte de irregularidades:")
+    print(result.irregularities_report_pdf_path)

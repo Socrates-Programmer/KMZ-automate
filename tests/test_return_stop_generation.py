@@ -108,6 +108,47 @@ def test_very_close_successive_stops_are_consolidated_even_without_school():
     assert [stop.new_name for stop in correction.stops] == ["P1", "P2", "P3", "P4"]
 
 
+def test_removed_stop_farther_than_150_meters_from_route_is_reported():
+    route = Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=[(-69.2, 18.0, None), (-69.0, 18.0, None)],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        stops=[
+            make_stop("P1 vieja", -69.2, 18.01, 0),
+            make_stop("P2 vieja", -69.1999, 18.01, 1),
+        ],
+    )
+
+    correction = correct_route(route, [], 10, 100)
+
+    assert any(irregularity.kind == "removed_far_stop" for irregularity in correction.irregularities)
+    assert correction.irregularities[0].distance_meters > 150
+
+
+def test_long_route_gap_without_stops_is_reported():
+    route = Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=[(-69.2, 18.0, None), (-69.0, 18.0, None)],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        stops=[
+            make_stop("P1", -69.2, 18.0, 0),
+            make_stop("P2", -69.19, 18.0, 1),
+        ],
+    )
+
+    correction = correct_route(route, [], 10, 100)
+
+    assert any(irregularity.kind == "route_gap" for irregularity in correction.irregularities)
+
+
 def test_close_successive_stops_are_consolidated_even_with_different_nearby_schools():
     route = Route(
         name="Ruta test",

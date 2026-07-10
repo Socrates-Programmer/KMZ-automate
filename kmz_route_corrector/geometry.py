@@ -127,6 +127,55 @@ def distance_along_line_meters(lon: float, lat: float, line_coords: list[Coordin
     return projected[0]
 
 
+def distance_to_line_meters(lon: float, lat: float, line_coords: list[Coordinate]) -> float | None:
+    if len(line_coords) < 2:
+        return None
+
+    lon0, lat0 = centroid(line_coords)
+    projector = Projector(lon0, lat0)
+    line_xy = [projector.project(xlon, xlat) for xlon, xlat, _ in line_coords]
+    point_xy = projector.project(lon, lat)
+    projected = project_point_on_polyline(point_xy, line_xy)
+    if projected is None:
+        return None
+    qx, qy = projected[1]
+    return math.hypot(point_xy[0] - qx, point_xy[1] - qy)
+
+
+def line_length_meters(line_coords: list[Coordinate]) -> float:
+    if len(line_coords) < 2:
+        return 0.0
+
+    lon0, lat0 = centroid(line_coords)
+    projector = Projector(lon0, lat0)
+    line_xy = [projector.project(lon, lat) for lon, lat, _ in line_coords]
+    return sum(math.hypot(bx - ax, by - ay) for (ax, ay), (bx, by) in zip(line_xy, line_xy[1:]))
+
+
+def point_at_distance_along_line(line_coords: list[Coordinate], distance_meters: float) -> tuple[float, float] | None:
+    if len(line_coords) < 2:
+        return None
+
+    lon0, lat0 = centroid(line_coords)
+    projector = Projector(lon0, lat0)
+    line_xy = [projector.project(lon, lat) for lon, lat, _ in line_coords]
+    remaining = max(0.0, distance_meters)
+
+    for start, end in zip(line_xy, line_xy[1:]):
+        ax, ay = start
+        bx, by = end
+        seg_len = math.hypot(bx - ax, by - ay)
+        if seg_len == 0:
+            continue
+        if remaining <= seg_len:
+            ratio = remaining / seg_len
+            return projector.unproject(ax + (bx - ax) * ratio, ay + (by - ay) * ratio)
+        remaining -= seg_len
+
+    lon, lat, _ = line_coords[-1]
+    return lon, lat
+
+
 def order_stops_by_line(stops: list[Stop], line_coords: list[Coordinate]) -> tuple[list[Stop], str, list[str]]:
     warnings: list[str] = []
     if len(line_coords) < 2:
