@@ -8,8 +8,12 @@ from .kml_parser import name_of, parent_map, path_names, point_coordinate, simpl
 from .models import School, SchoolMatch
 
 
-SCHOOL_KEYS = {"Centro educativo", "Plantel"}
-SCHOOL_NAME_HINTS = ("ESCUELA", "CENTRO EDUCATIVO")
+SCHOOL_KEYS = {"centro educativo", "centros educativos", "plantel"}
+SCHOOL_HINT_PATTERNS = (
+    re.compile(r"\bESCUELAS?\b"),
+    re.compile(r"\bCENTROS?\s+EDUCATIVOS?\b"),
+    re.compile(r"\bLICEOS?\b"),
+)
 
 
 def clean_school_name(value: str) -> str:
@@ -19,18 +23,23 @@ def clean_school_name(value: str) -> str:
     return value.upper()
 
 
+def has_school_hint(value: str) -> bool:
+    clean_value = clean_school_name(value)
+    return any(pattern.search(clean_value) for pattern in SCHOOL_HINT_PATTERNS)
+
+
+def school_data_values(data: dict[str, str]) -> list[str]:
+    return [value for key, value in data.items() if key.strip().lower() in SCHOOL_KEYS and value]
+
+
 def full_school_name(placemark_name: str, data: dict[str, str]) -> tuple[str, str]:
-    candidates = [
-        placemark_name,
-        data.get("Centro educativo", ""),
-        data.get("Plantel", ""),
-    ]
+    candidates = [placemark_name, *school_data_values(data)]
     cleaned = [clean_school_name(candidate) for candidate in candidates if clean_school_name(candidate)]
     if not cleaned:
         return "", ""
 
-    selected = next((name for name in cleaned if any(hint in name for hint in SCHOOL_NAME_HINTS)), cleaned[0])
-    if not any(hint in selected for hint in SCHOOL_NAME_HINTS):
+    selected = next((name for name in cleaned if has_school_hint(name)), cleaned[0])
+    if not has_school_hint(selected):
         selected = f"CENTRO EDUCATIVO {selected}"
     return selected, selected
 
@@ -44,15 +53,17 @@ def detect_schools(root: ET.Element) -> tuple[list[School], list[str]]:
         coord = point_coordinate(placemark)
         if coord is None:
             continue
+        placemark_name = name_of(placemark)
         data = simple_data(placemark)
-        folders = [part.lower() for part in path_names(placemark, parents)]
-        in_school_folder = any("escuela" in part or "centro educativo" in part for part in folders)
-        has_school_data = any(key in data for key in SCHOOL_KEYS)
-        if not in_school_folder and not has_school_data:
+        folders = path_names(placemark, parents)
+        in_school_folder = any(has_school_hint(part) for part in folders)
+        has_school_data = bool(school_data_values(data))
+        has_school_name = has_school_hint(placemark_name)
+        if not in_school_folder and not has_school_data and not has_school_name:
             continue
 
-        raw_name = name_of(placemark) or data.get("Centro educativo") or data.get("Plantel") or ""
-        clean_name, display_name = full_school_name(name_of(placemark), data)
+        raw_name = placemark_name or next(iter(school_data_values(data)), "")
+        clean_name, display_name = full_school_name(placemark_name, data)
         if not clean_name:
             warnings.append("Se encontro un posible centro educativo sin nombre; fue omitido.")
             continue

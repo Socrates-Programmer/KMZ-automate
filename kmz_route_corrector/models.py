@@ -65,6 +65,7 @@ class CorrectedStop:
     offset_meters: float
     school_name: str = ""
     school_distance_meters: float | None = None
+    school_source: str = ""
     is_pf: bool = False
     ordering_method: str = ""
     warnings: list[str] = field(default_factory=list)
@@ -95,6 +96,7 @@ class ProcessResult:
     output_kmz_path: Path
     output_kml_path: Path
     report_csv_path: Path
+    route_flow_csv_path: Path
     warnings_log_path: Path
     route_excel_paths: list[Path]
     bundle_zip_path: Path | None

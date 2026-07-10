@@ -68,6 +68,8 @@ def add_stop_placemark(parent: ET.Element, stop: CorrectedStop) -> None:
         description = f"Centro educativo detectado: {stop.school_name}"
         if stop.school_distance_meters is not None:
             description += f" ({stop.school_distance_meters:.1f} m)"
+        if stop.school_source in {"OpenStreetMap", "Google Places"}:
+            description += f"\nFuente: {stop.school_source}"
         ET.SubElement(placemark, kml_tag("description")).text = description
     point = ET.SubElement(placemark, kml_tag("Point"))
     ET.SubElement(point, kml_tag("coordinates")).text = format_coordinate(stop.new_lon, stop.new_lat)

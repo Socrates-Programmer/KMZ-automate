@@ -59,12 +59,47 @@ label {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 11px 12px;
   font: inherit;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+.days-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.check-label input {
+  width: auto;
 }
 
 .grid {
@@ -172,6 +207,7 @@ dd {
   }
 
   .grid,
+  .form-grid,
   .summary {
     grid-template-columns: 1fr;
   }

@@ -1,6 +1,6 @@
 from kmz_route_corrector.core import correct_route
 from kmz_route_corrector.geometry import haversine_meters
-from kmz_route_corrector.models import Route, School, Stop
+from kmz_route_corrector.models import Route, School, SchoolMatch, Stop
 
 
 def make_stop(name, lon, lat, index):
@@ -30,7 +30,7 @@ def test_generates_outbound_and_return_stop_per_original_stop():
     assert all(stop.is_pf is False for stop in correction.stops)
 
 
-def test_outbound_nearby_stops_get_school_name_and_return_stops_do_not():
+def test_return_stops_inherit_school_name_from_adjacent_outbound_stop():
     route = Route(
         name="Ruta test",
         container=None,
@@ -54,8 +54,8 @@ def test_outbound_nearby_stops_get_school_name_and_return_stops_do_not():
     assert [stop.new_name for stop in correction.stops] == [
         "P1 - ESCUELA TEST",
         "P2 - OTRA ESCUELA",
-        "P3",
-        "P4",
+        "P3 - OTRA ESCUELA",
+        "P4 - ESCUELA TEST",
     ]
 
 
@@ -78,7 +78,12 @@ def test_close_stops_by_same_school_are_consolidated_before_numbering():
 
     correction = correct_route(route, schools, 8, 100)
 
-    assert [stop.new_name for stop in correction.stops] == ["P1 - CENTRO EDUCATIVO TEST", "P2", "P3", "P4"]
+    assert [stop.new_name for stop in correction.stops] == [
+        "P1 - CENTRO EDUCATIVO TEST",
+        "P2",
+        "P3",
+        "P4 - CENTRO EDUCATIVO TEST",
+    ]
     assert any("Parada duplicada consolidada" in warning for warning in correction.warnings)
 
 
@@ -125,7 +130,12 @@ def test_close_successive_stops_are_consolidated_even_with_different_nearby_scho
 
     correction = correct_route(route, schools, 8, 100)
 
-    assert [stop.new_name for stop in correction.stops] == ["P1 - CENTRO EDUCATIVO A", "P2", "P3", "P4"]
+    assert [stop.new_name for stop in correction.stops] == [
+        "P1 - CENTRO EDUCATIVO A",
+        "P2",
+        "P3",
+        "P4 - CENTRO EDUCATIVO A",
+    ]
 
 
 def test_school_farther_than_100_meters_is_not_assigned():
@@ -146,6 +156,39 @@ def test_school_farther_than_100_meters_is_not_assigned():
     assert [stop.new_name for stop in correction.stops] == ["P1", "P2"]
 
 
+def test_external_school_lookup_is_used_when_kmz_has_no_nearby_school():
+    route = Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=[(-70.281, 18.5225, None), (-70.280, 18.5225, None)],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        stops=[make_stop("P28", -70.280968, 18.522499, 0)],
+    )
+
+    def fake_lookup(lon, lat, radius_meters):
+        return SchoolMatch(
+            school=School(
+                name="ESCUELA BASICA EMI LOS JIBAROS",
+                lon=lon - 0.0003,
+                lat=lat,
+                source="Google Places",
+            ),
+            distance_meters=55.0,
+        )
+
+    correction = correct_route(route, [], 10, 100, external_school_lookup=fake_lookup)
+
+    assert [stop.new_name for stop in correction.stops] == [
+        "P1 - ESCUELA BASICA EMI LOS JIBAROS",
+        "P2 - ESCUELA BASICA EMI LOS JIBAROS",
+    ]
+    assert correction.stops[0].school_source == "Google Places"
+    assert any("Google Places" in warning for warning in correction.stops[0].warnings)
+
+
 def test_repeated_school_label_within_150_meters_is_omitted_on_outbound_stop():
     route = Route(
         name="Ruta test",
@@ -164,7 +207,12 @@ def test_repeated_school_label_within_150_meters_is_omitted_on_outbound_stop():
 
     correction = correct_route(route, schools, 8, 100)
 
-    assert [stop.new_name for stop in correction.stops] == ["P1 - CENTRO EDUCATIVO TEST", "P2", "P3", "P4"]
+    assert [stop.new_name for stop in correction.stops] == [
+        "P1 - CENTRO EDUCATIVO TEST",
+        "P2",
+        "P3",
+        "P4 - CENTRO EDUCATIVO TEST",
+    ]
     assert any("Nombre de centro educativo omitido" in warning for warning in correction.stops[1].warnings)
 
 
@@ -189,8 +237,8 @@ def test_repeated_school_label_farther_than_150_meters_is_allowed_on_outbound_st
     assert [stop.new_name for stop in correction.stops] == [
         "P1 - CENTRO EDUCATIVO TEST",
         "P2 - CENTRO EDUCATIVO TEST",
-        "P3",
-        "P4",
+        "P3 - CENTRO EDUCATIVO TEST",
+        "P4 - CENTRO EDUCATIVO TEST",
     ]
 
 
@@ -218,8 +266,8 @@ def test_different_school_label_within_150_meters_is_allowed_on_outbound_stop():
     assert [stop.new_name for stop in correction.stops] == [
         "P1 - CENTRO EDUCATIVO A",
         "P2 - CENTRO EDUCATIVO B",
-        "P3",
-        "P4",
+        "P3 - CENTRO EDUCATIVO B",
+        "P4 - CENTRO EDUCATIVO A",
     ]
 
 
