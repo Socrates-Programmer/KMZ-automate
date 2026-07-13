@@ -566,33 +566,40 @@ def build_stop_route_template_rows(
     district_code = district_code_from_name(correction.route.district_name)
     route_number = route_number_from_name(correction.route.name) or fallback_route_number
     route_name = route_excel_label(correction.route.name)
-    ficha_autobus = joined_assignment_values(assignments, "ficha_autobus") or "NO ASIGNADO"
-    conductor = joined_assignment_values(assignments, "conductor") or "NO ASIGNADO"
+    route_assignments = stop_template_assignments(assignments)
 
     rows: list[list[str | float]] = []
-    for index, stop in enumerate(correction.stops, start=1):
-        stop_number = stop_number_from_name(stop.new_name) or index
+    total_rows = max(len(correction.stops), len(route_assignments))
+    for index in range(1, total_rows + 1):
+        stop = correction.stops[index - 1] if index <= len(correction.stops) else None
+        assignment = route_assignments[index - 1] if index <= len(route_assignments) else None
+        stop_number = stop_number_from_name(stop.new_name) if stop else None
+        stop_id = f"{district_code or '0000'}R{route_number}P{stop_number or index}" if stop else ""
         rows.append(
             [
-                f"{district_code or '0000'}R{route_number}P{stop_number}",
-                ficha_autobus if index == 1 else "",
-                conductor if index == 1 else "",
+                stop_id,
+                assignment.ficha_autobus if assignment else "",
+                assignment.conductor if assignment else "",
                 route_name,
-                stop.new_name,
-                f"{stop.new_lat:.8f}",
-                f"{stop.new_lon:.8f}",
+                stop.new_name if stop else "",
+                f"{stop.new_lat:.8f}" if stop else "",
+                f"{stop.new_lon:.8f}" if stop else "",
             ]
         )
     return rows
 
 
-def joined_assignment_values(assignments: list[DriverAssignment], field_name: str) -> str:
-    values: list[str] = []
+def stop_template_assignments(assignments: list[DriverAssignment]) -> list[DriverAssignment]:
+    unique_assignments: list[DriverAssignment] = []
     for assignment in assignments:
-        value = clean_driver_value(getattr(assignment, field_name, ""))
-        if value and value not in values:
-            values.append(value)
-    return " / ".join(values)
+        ficha_autobus = clean_driver_value(assignment.ficha_autobus)
+        conductor = clean_driver_value(assignment.conductor)
+        if not ficha_autobus and not conductor:
+            continue
+        candidate = DriverAssignment(ficha_autobus=ficha_autobus, conductor=conductor)
+        if candidate not in unique_assignments:
+            unique_assignments.append(candidate)
+    return unique_assignments or [DriverAssignment(ficha_autobus="NO ASIGNADO", conductor="NO ASIGNADO")]
 
 
 def route_template_route_name(route_name: str | None) -> str:
