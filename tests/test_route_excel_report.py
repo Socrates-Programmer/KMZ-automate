@@ -245,8 +245,8 @@ def test_write_route_excels_can_use_stop_route_template(tmp_path):
     assert rows[0] == STOP_ROUTE_TEMPLATE_HEADERS
     assert rows[1] == [
         "0511R2P1",
-        "BUS-77 / BUS-88",
-        "CHOFER UNO / CHOFER DOS",
+        "BUS-77",
+        "CHOFER UNO",
         "RUTA 2",
         "P1 - CENTRO EDUCATIVO TEST",
         "18.45523777",
@@ -254,8 +254,8 @@ def test_write_route_excels_can_use_stop_route_template(tmp_path):
     ]
     assert rows[2] == [
         "0511R2P2",
-        "",
-        "",
+        "BUS-88",
+        "CHOFER DOS",
         "RUTA 2",
         "P2",
         "18.45230103",

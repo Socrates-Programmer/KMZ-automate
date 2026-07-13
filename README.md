@@ -115,7 +115,7 @@ La plantilla se llena con:
 
 La coincidencia de ficha/vehiculo se busca por codigo de distrito y numero de ruta usando `db/KMZ.csv`. Si hay varias fichas para la misma ruta, se crea una fila por ficha dentro del mismo Excel de la ruta. La herramienta llena todos los campos de `BulkCreateTrip.xlsx`; los datos operativos que no vienen en el KMZ, como fechas, horarios, dias y tipo de viaje, salen con valores por defecto editables antes de procesar.
 
-Si seleccionas `Plantilla de rutas`, se usa `kmz-plantilla/Plantillas de rutas.xlsx`. En ese formato se crea una fila por parada: `ID` sale como distrito+ruta+parada, por ejemplo `0901R4P1`; `routename` sale sin `#`, por ejemplo `RUTA 4`; `station name`, `latitude` y `longitude` salen del KML corregido. La ficha y el conductor se escriben una sola vez en la primera fila de la ruta; si hay varias fichas o choferes para esa ruta, se agregan juntos separados por `/`.
+Si seleccionas `Plantilla de rutas`, se usa `kmz-plantilla/Plantillas de rutas.xlsx`. En ese formato se crea una fila por parada: `ID` sale como distrito+ruta+parada, por ejemplo `0901R4P1`; `routename` sale sin `#`, por ejemplo `RUTA 4`; `station name`, `latitude` y `longitude` salen del KML corregido. Si hay varias fichas o choferes para esa ruta, se colocan en filas separadas dentro de las columnas `Ficha Autobus` y `Nombre Del Conductor`; no se concatenan con `/`.
 
 ## Logica de correccion
 
