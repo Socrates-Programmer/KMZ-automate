@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 from .geometry import haversine_meters
 from .models import School, SchoolMatch
-from .school_detector import clean_school_name, has_school_hint
+from .school_detector import clean_school_name, has_disallowed_school_hint
 
 
 GOOGLE_PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
@@ -165,9 +165,8 @@ def school_from_place(place: dict) -> School | None:
     clean_name = clean_school_name(raw_name)
     if not clean_name:
         return None
-    if not has_school_hint(clean_name):
-        clean_name = f"CENTRO EDUCATIVO {clean_name}"
-
+    if has_disallowed_school_hint(clean_name):
+        return None
     return School(
         name=clean_name,
         lon=float(lon),

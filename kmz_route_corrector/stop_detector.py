@@ -11,8 +11,10 @@ from .kml_parser import (
     name_of,
     normalize_text,
     point_coordinate,
+    simple_data,
 )
 from .models import Route, Stop
+from .school_detector import has_school_hint, school_data_values
 
 P_NUMBER_RE = re.compile(r"^\s*P\s*(\d+)\b", re.IGNORECASE)
 
@@ -36,7 +38,10 @@ def extract_stops_from_route(route: Route) -> list[Stop]:
     source_folders = [node for node in route.stop_source_nodes if getattr(node, "tag", "").endswith("Folder")]
     if source_folders:
         for folder in source_folders:
+            folder_is_paradas = is_paradas_folder(folder) or is_corrected_folder(folder)
             for placemark in direct_placemarks(folder):
+                if not should_use_as_stop_placemark(placemark, trusted_stop_source=folder_is_paradas):
+                    continue
                 coord = point_coordinate(placemark)
                 if coord is None:
                     continue
@@ -56,6 +61,8 @@ def extract_stops_from_route(route: Route) -> list[Stop]:
                 source_index += 1
     else:
         for placemark in route.stop_source_nodes:
+            if not should_use_as_stop_placemark(placemark, trusted_stop_source=False):
+                continue
             coord = point_coordinate(placemark)
             if coord is None:
                 continue
@@ -76,6 +83,21 @@ def extract_stops_from_route(route: Route) -> list[Stop]:
             source_index += 1
 
     return dedupe_stops(stops, route.warnings)
+
+
+def should_use_as_stop_placemark(placemark: ET.Element, *, trusted_stop_source: bool) -> bool:
+    if not has_geometry(placemark, "Point"):
+        return False
+    name = normalize_text(name_of(placemark))
+    if P_NUMBER_RE.match(name):
+        return True
+    if trusted_stop_source:
+        return True
+    if has_school_hint(name):
+        return False
+    if school_data_values(simple_data(placemark)):
+        return False
+    return True
 
 
 def dedupe_stops(stops: list[Stop], warnings: list[str]) -> list[Stop]:

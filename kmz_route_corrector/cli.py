@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", required=True, help="Ruta del archivo .kmz de entrada.")
     parser.add_argument("--output", help="Ruta del archivo .kmz corregido.")
     parser.add_argument("--offset-meters", type=float, default=10.0, help="Separacion lateral minima desde la linea, 10 metros o mas.")
-    parser.add_argument("--school-radius-meters", type=float, default=100.0, help="Radio de busqueda de centros educativos.")
+    parser.add_argument("--school-radius-meters", type=float, default=400.0, help="Radio de busqueda de centros educativos.")
     parser.add_argument(
         "--google-places-api-key",
         help=(

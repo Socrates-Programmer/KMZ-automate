@@ -82,6 +82,7 @@ class Irregularity:
     line_coords: list[Coordinate] = field(default_factory=list)
     points: list[tuple[str, float, float]] = field(default_factory=list)
     distance_meters: float | None = None
+    district_name: str = "Sin distrito"
 
 
 @dataclass

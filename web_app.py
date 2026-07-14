@@ -63,7 +63,7 @@ def process_upload():
         ), 400
 
     offset_meters = 10.0
-    school_radius_meters = 100.0
+    school_radius_meters = 400.0
     schedule_days = request.form.getlist("schedule_days")
 
     job_id = uuid.uuid4().hex

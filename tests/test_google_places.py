@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from kmz_route_corrector.google_places import GooglePlacesSchoolLookup, school_from_place
 
 
-def test_school_from_place_prefixes_school_type_name_without_hint():
+def test_school_from_place_preserves_name_without_hint():
     school = school_from_place(
         {
             "displayName": {"text": "EMI Los Jibaros"},
@@ -14,8 +14,20 @@ def test_school_from_place_prefixes_school_type_name_without_hint():
     )
 
     assert school is not None
-    assert school.name == "CENTRO EDUCATIVO EMI LOS JIBAROS"
+    assert school.name == "EMI LOS JIBAROS"
     assert school.source == "Google Places"
+
+
+def test_school_from_place_ignores_colegio_name():
+    school = school_from_place(
+        {
+            "displayName": {"text": "Colegio Los Jibaros"},
+            "location": {"latitude": 18.5221, "longitude": -70.2809},
+            "types": ["school"],
+        }
+    )
+
+    assert school is None
 
 
 def test_google_places_lookup_selects_nearest_school(monkeypatch):

@@ -70,7 +70,7 @@ Parametros:
 - `--input`: archivo `.kmz` de entrada.
 - `--output`: archivo `.kmz` corregido. Si se omite, se agrega `_corregido` al nombre original.
 - `--offset-meters`: separacion lateral desde la linea. Default `10`, minimo `10`.
-- `--school-radius-meters`: radio para asignar centros educativos. Default `100`.
+- `--school-radius-meters`: radio para asignar centros educativos. Default `400`.
 - `--google-places-api-key`: API key opcional de Google Places para buscar escuelas cercanas si no aparecen en el KMZ ni en OpenStreetMap. Tambien puede usarse la variable de entorno `GOOGLE_MAPS_API_KEY`.
 - `--google-places-monthly-limit`: limite mensual local de requests a Google Places. Default `5000` o variable `GOOGLE_PLACES_MONTHLY_LIMIT`.
 - `--drivers-csv`: CSV de choferes/autobuses. Default `db/KMZ.csv` o variable `KMZ_DRIVERS_CSV_PATH`.
@@ -142,10 +142,12 @@ El ZIP incluye `reporte_irregularidades.pdf`. El PDF se genera siempre; si no ha
 
 El reporte mide:
 
-- Paradas eliminadas/consolidadas que estaban a mas de `150 m` de la linea de ruta.
-- Tramos largos de ruta sin paradas, usando un umbral de `1500 m` entre inicio/paradas/fin de ruta.
+- Paradas originales eliminadas/consolidadas durante la limpieza de duplicados.
+- Paradas eliminadas/consolidadas que estaban a mas de `150 m` de la linea de ruta, marcadas como caso especifico.
+- Tramos largos de ruta sin paradas, usando un umbral de `1500 m` entre inicio/paradas/fin de ruta. Estos tramos se calculan con las paradas originales ordenadas antes de consolidar, y se nombran con la secuencia corregida (`P7 -> P8`) aunque el KMZ viejo tenga saltos como `P7 -> P10`.
+- Paradas de ida creadas que no coincidan con una parada original conservada. Las paradas de regreso generadas automaticamente no cuentan como irregularidad porque son esperadas por la herramienta.
 
-Cada hallazgo incluye una captura esquematica con la linea de ruta y el punto o tramo asociado a la irregularidad. Estas capturas no son imagenes satelitales; son diagramas generados desde la geometria del KMZ para ubicar el problema rapidamente.
+Cada hallazgo muestra en el encabezado el distrito y la ruta a la que pertenece. Tambien incluye una captura esquematica con la linea de ruta y el punto o tramo asociado a la irregularidad. Estas capturas no son imagenes satelitales; son diagramas generados desde la geometria del KMZ para ubicar el problema rapidamente.
 
 ## Deteccion de rutas, paradas y escuelas
 
@@ -163,9 +165,9 @@ El orden se calcula asi:
 2. Si no hay `LineString`, se ordenan por numero `P#` cuando aplique.
 3. Si no se puede, se conserva el orden KML y se registra advertencia.
 
-Los centros educativos se detectan primero dentro del KMZ por nombre visible, carpeta o `SimpleData` usando pistas como `Escuela`, `Centro educativo`, `Centros educativos`, `Liceo`, `Liceos` o `Plantel`. Se elimina codigo inicial tipo `01391 - NOMBRE`, se convierte a mayusculas y se agrega el centro mas cercano a paradas de ida dentro de 100 metros, con formato `P4 - CENTRO EDUCATIVO X`.
+Los centros educativos se detectan primero dentro del KMZ por nombre visible, carpeta o `SimpleData` usando pistas como `Escuela`, `Escuela Primaria`, `Centro educativo`, `Centros educativos`, `Liceo`, `Liceos`, `Instituto` o `Plantel`. Se elimina codigo inicial tipo `01391 - NOMBRE`, se convierte a mayusculas y cada centro asigna su nombre solo a la parada de ida mas cercana y a la parada de regreso mas cercana dentro de 400 metros, con formato `P4 - CENTRO EDUCATIVO X`.
 
-Si no hay un centro educativo del KMZ dentro del radio, la herramienta consulta OpenStreetMap/Overpass como respaldo gratuito usando `amenity=school|college|university|kindergarten` y nombres como `escuela`, `liceo`, `centro educativo`, `instituto` o `colegio`. Las paradas asignadas con esa fuente quedan marcadas como `OpenStreetMap` en el CSV, en `warnings.log` y en la descripcion KML.
+Si quedan paradas sin centro educativo del KMZ, la herramienta puede consultar OpenStreetMap/Overpass como respaldo gratuito usando `amenity=school|university|kindergarten` y nombres como `escuela`, `liceo`, `centro educativo`, `instituto` o `plantel`. `Colegio` no se usa como palabra clave ni como resultado valido. La fuente online solo completa paradas sin nombre y no reemplaza nombres asignados desde el KMZ. Las paradas asignadas con esa fuente quedan marcadas como `OpenStreetMap` en el CSV, en `warnings.log` y en la descripcion KML.
 
 Si tampoco hay resultado en OpenStreetMap y existe `GOOGLE_MAPS_API_KEY`, la herramienta consulta Google Places como respaldo opcional usando tipos educativos (`school`, `primary_school`, `secondary_school`). Las paradas asignadas con esa fuente quedan marcadas como `Google Places`. Este respaldo requiere una API key valida de Google Maps Platform con Places API habilitada y billing activo.
 
@@ -179,7 +181,7 @@ python web_app.py
 
 Puedes bajar el limite, por ejemplo a `4500`, para dejar margen de seguridad. Este contador local ayuda, pero conviene configurar tambien cuota y alertas en Google Cloud.
 
-Si una parada de ida detecta el mismo centro educativo que otra parada anterior de ida dentro de 150 metros, conserva solo su numero (`P#`) para evitar repetir el mismo instituto demasiado cerca.
+Cada centro educativo solo puede nombrar una parada de ida y una parada de regreso dentro del radio configurado. Si varias paradas estan cerca del mismo centro, se usan las mas cercanas por sentido.
 
 ## Revision en Google Earth Pro
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 
 from .kml_parser import (
@@ -56,13 +57,14 @@ def is_route_folder(folder: ET.Element) -> bool:
 
     direct_lines = direct_line_placemarks(folder)
     direct_stops = direct_point_placemarks(folder)
-    paradas = [child for child in direct_folders(folder) if is_paradas_folder(child)]
+    stop_folders = direct_stop_folders(folder)
     nested_line = first_line_in_direct_child(folder) is not None
+    nested_route_child = has_direct_route_child(folder)
     has_route_name = "ruta" in lname
 
-    if has_route_name and (direct_lines or direct_stops or paradas or nested_line):
+    if has_route_name and (direct_lines or direct_stops or stop_folders or (nested_line and not nested_route_child)):
         return True
-    if direct_lines and (direct_stops or paradas):
+    if direct_lines and (direct_stops or stop_folders):
         return True
     return False
 
@@ -74,7 +76,7 @@ def has_route_ancestor_with_stops(
 ) -> bool:
     parent = parents.get(folder)
     while parent is not None:
-        if parent in candidates and any(is_paradas_folder(child) for child in direct_folders(parent)):
+        if parent in candidates and direct_stop_folders(parent):
             return True
         parent = parents.get(parent)
     return False
@@ -91,16 +93,20 @@ def nearest_document(element: ET.Element, parents: dict[ET.Element, ET.Element])
 
 def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[ET.Element, ET.Element]) -> Route | None:
     name = name_of(folder) or "Ruta sin nombre"
-    line_pm = first_direct_line(folder) or first_line_in_direct_child(folder)
+    line_pm = first_direct_line(folder)
+    if line_pm is None:
+        line_pm = first_line_in_direct_child(folder)
     line_coords = line_coordinates(line_pm) if line_pm is not None else []
 
     paradas_folders = [child for child in direct_folders(folder) if is_paradas_folder(child)]
+    corrected_folders = [child for child in direct_folders(folder) if is_corrected_folder(child)]
+    stop_folders = paradas_folders or corrected_folders
     warnings: list[str] = []
-    if len(paradas_folders) > 1:
-        warnings.append("La ruta tiene multiples carpetas Paradas; se unieron y deduplicaron.")
+    if len(stop_folders) > 1:
+        warnings.append("La ruta tiene multiples carpetas de paradas; se unieron y deduplicaron.")
 
-    if paradas_folders:
-        stop_nodes = [*paradas_folders]
+    if stop_folders:
+        stop_nodes = [*stop_folders]
         stop_parents = [folder]
     else:
         stop_nodes = direct_point_placemarks(folder)
@@ -129,7 +135,7 @@ def detect_document_level_routes(root: ET.Element, folder_routes: set[ET.Element
             continue
         stop_folders = [
             child for child in direct_folders(document)
-            if (is_waypoints_folder(child) or is_paradas_folder(child)) and child not in folder_routes
+            if (is_waypoints_folder(child) or is_paradas_folder(child) or is_corrected_folder(child)) and child not in folder_routes
         ]
         if not stop_folders:
             continue
@@ -154,13 +160,32 @@ def detect_document_level_routes(root: ET.Element, folder_routes: set[ET.Element
 
 def nearest_parent_folder_name(element: ET.Element, parents: dict[ET.Element, ET.Element]) -> str:
     current = parents.get(element)
+    fallback = ""
     while current is not None:
         if current.tag.endswith("Folder"):
             name = name_of(current)
-            if name:
+            if name and not fallback:
+                fallback = name
+            if name and not is_route_like_folder_name(name):
                 return name
         current = parents.get(current)
-    return ""
+    return fallback
+
+
+def is_route_like_folder_name(name: str) -> bool:
+    lname = normalize_text(name).lower()
+    return bool(re.search(r"\bruta\s*[_#:\-]*\s*\d+\b", lname))
+
+
+def has_direct_route_child(folder: ET.Element) -> bool:
+    return any(is_route_like_folder_name(name_of(child)) for child in direct_folders(folder))
+
+
+def direct_stop_folders(folder: ET.Element) -> list[ET.Element]:
+    paradas_folders = [child for child in direct_folders(folder) if is_paradas_folder(child)]
+    if paradas_folders:
+        return paradas_folders
+    return [child for child in direct_folders(folder) if is_corrected_folder(child)]
 
 
 def direct_line_placemarks(element: ET.Element) -> list[ET.Element]:

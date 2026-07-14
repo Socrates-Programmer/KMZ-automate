@@ -3,7 +3,7 @@ import json
 from kmz_route_corrector.osm_overpass import OpenStreetMapSchoolLookup, overpass_query, school_from_osm_element
 
 
-def test_school_from_osm_node_prefixes_amenity_school_name_without_hint():
+def test_school_from_osm_node_preserves_name_without_hint():
     school = school_from_osm_element(
         {
             "type": "node",
@@ -14,7 +14,7 @@ def test_school_from_osm_node_prefixes_amenity_school_name_without_hint():
     )
 
     assert school is not None
-    assert school.name == "CENTRO EDUCATIVO EMI LOS JIBAROS"
+    assert school.name == "EMI LOS JIBAROS"
     assert school.source == "OpenStreetMap"
 
 
@@ -41,6 +41,21 @@ def test_overpass_query_uses_radius_and_school_filters():
     assert "name" in query
     assert "escuela" in query
     assert "liceo" in query
+    assert "instituto" in query
+    assert "colegio" not in query
+
+
+def test_school_from_osm_ignores_colegio_name():
+    school = school_from_osm_element(
+        {
+            "type": "node",
+            "lat": 18.52255,
+            "lon": -70.28095,
+            "tags": {"amenity": "school", "name": "Colegio Los Jibaros"},
+        }
+    )
+
+    assert school is None
 
 
 def test_openstreetmap_lookup_selects_nearest_school(monkeypatch):

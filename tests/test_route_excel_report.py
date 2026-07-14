@@ -6,6 +6,7 @@ from kmz_route_corrector.core import make_bundle
 from kmz_route_corrector.irregularity_report import write_irregularities_pdf
 from kmz_route_corrector.models import Irregularity
 from kmz_route_corrector.models import CorrectedStop, Route, RouteCorrection
+from kmz_route_corrector.route_detector import detect_routes
 from kmz_route_corrector.report import (
     ROUTE_EXCEL_TEMPLATE_STOPS,
     STOP_ROUTE_TEMPLATE_HEADERS,
@@ -269,6 +270,94 @@ def test_route_excel_label_uses_route_number():
     assert route_excel_label("Ruta_#12") == "RUTA 12"
 
 
+def test_write_route_excels_keeps_routes_without_stops(tmp_path):
+    route = Route(
+        name="Ruta #11 Jaiqui Picao (en espera bus)",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=[(-70.1, 19.1, None), (-70.2, 19.2, None)],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        district_name="Distrito 08-01 SJM",
+    )
+    correction = RouteCorrection(route=route, ordering_method="sin_paradas", stops=[])
+
+    paths = write_route_excels(
+        tmp_path / "excel_rutas",
+        [correction],
+        drivers_csv_path=tmp_path / "KMZ.csv",
+        route_template_path=tmp_path / "plantilla-inexistente.xlsx",
+        route_excel_template=ROUTE_EXCEL_TEMPLATE_STOPS,
+    )
+
+    assert len(paths) == 1
+    assert paths[0].parent.name == "Rutas 08-01"
+    assert paths[0].name == "001_Ruta #11 Jaiqui Picao (en espera bus).xlsx"
+    rows = read_sheet_rows(paths[0])
+    assert rows[0] == STOP_ROUTE_TEMPLATE_HEADERS
+
+
+def test_nested_route_uses_district_parent_not_route_parent():
+    kml = """<kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+      <name>Santiago Rutas escolares</name>
+      <Folder>
+        <name>Distrito 08-01 SJM</name>
+        <Folder>
+          <name>Ruta #6</name>
+          <Folder>
+            <name>Ruta #6</name>
+            <Placemark>
+              <name>Ruta #6</name>
+              <LineString><coordinates>-70.1,19.1,0 -70.2,19.2,0</coordinates></LineString>
+            </Placemark>
+            <Folder>
+              <name>Paradas</name>
+              <Placemark><name>P1</name><Point><coordinates>-70.1,19.1,0</coordinates></Point></Placemark>
+            </Folder>
+          </Folder>
+        </Folder>
+      </Folder>
+    </Document>
+    </kml>"""
+    root = ET.fromstring(kml)
+
+    routes, _ = detect_routes(root)
+
+    assert len(routes) == 1
+    assert routes[0].name == "Ruta #6"
+    assert routes[0].district_name == "Distrito 08-01 SJM"
+
+
+def test_detect_routes_uses_corrected_stops_when_original_stops_are_absent():
+    kml = """<kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+      <Folder>
+        <name>Distrito 08-01 SJM</name>
+        <Folder>
+          <name>Ruta #6</name>
+          <Placemark>
+            <name>Ruta #6</name>
+            <LineString><coordinates>-70.1,19.1,0 -70.2,19.2,0</coordinates></LineString>
+          </Placemark>
+          <Folder>
+            <name>Paradas corregidas</name>
+            <Placemark><name>P1</name><Point><coordinates>-70.1,19.1,0</coordinates></Point></Placemark>
+          </Folder>
+        </Folder>
+      </Folder>
+    </Document>
+    </kml>"""
+    root = ET.fromstring(kml)
+
+    routes, _ = detect_routes(root)
+
+    assert len(routes) == 1
+    assert routes[0].district_name == "Distrito 08-01 SJM"
+    assert [stop.name for stop in routes[0].stops] == ["P1"]
+
+
 def test_template_sheet_preserves_excel_compatibility_namespaces():
     template_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -331,6 +420,7 @@ def test_irregularities_pdf_is_generated(tmp_path):
         [
             Irregularity(
                 route_name="Ruta #1",
+                district_name="Distrito 07-05 Sur Este",
                 kind="route_gap",
                 title="Tramo largo sin paradas",
                 description="Tramo de prueba sin paradas.",
@@ -343,7 +433,16 @@ def test_irregularities_pdf_is_generated(tmp_path):
         ],
     )
 
-    assert path.read_bytes().startswith(b"%PDF-1.4")
+    pdf_bytes = path.read_bytes()
+    assert pdf_bytes.startswith(b"%PDF-1.4")
+    assert b"Indice por distrito y ruta" in pdf_bytes
+    assert b"Resumen de ruta" in pdf_bytes
+    assert b"Distrito: Distrito 07-05 Sur Este | Ruta: Ruta #1" in pdf_bytes
+    assert b"Tramo de 2000.0 m sin paradas entre P1 y P2." in pdf_bytes
+    assert b"Grafico consolidado: todas las irregularidades de esta ruta" in pdf_bytes
+    assert b"franja amarilla/roja=recorrido KML" in pdf_bytes
+    assert b"Detalle de irregularidad" not in pdf_bytes
+    assert b"Pagina 1 de 2" in pdf_bytes
 
 
 def test_bundle_includes_route_excels(tmp_path):

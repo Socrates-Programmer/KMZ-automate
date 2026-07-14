@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from urllib.error import HTTPError, URLError
@@ -7,12 +7,12 @@ from urllib.request import Request, urlopen
 
 from .geometry import haversine_meters
 from .models import School, SchoolMatch
-from .school_detector import clean_school_name, has_school_hint
+from .school_detector import clean_school_name, has_disallowed_school_hint
 
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-OSM_SCHOOL_AMENITIES = "school|college|university|kindergarten"
-OSM_SCHOOL_NAME_PATTERN = "escuela|liceo|centro educativo|instituto|colegio|plantel|politecnico|polit.cnic"
+OSM_SCHOOL_AMENITIES = "school|university|kindergarten"
+OSM_SCHOOL_NAME_PATTERN = "escuela|liceo|centro educativo|instituto|plantel|politecnico|polit.cnic"
 
 
 class OpenStreetMapSchoolLookup:
@@ -124,10 +124,8 @@ def school_from_osm_element(element: dict) -> School | None:
     clean_name = clean_school_name(raw_name)
     if not clean_name:
         return None
-
-    amenity = str(tags.get("amenity") or "")
-    if not has_school_hint(clean_name) and amenity in OSM_SCHOOL_AMENITIES.split("|"):
-        clean_name = f"CENTRO EDUCATIVO {clean_name}"
+    if has_disallowed_school_hint(clean_name):
+        return None
 
     return School(
         name=clean_name,

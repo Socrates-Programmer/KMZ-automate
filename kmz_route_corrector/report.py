@@ -370,8 +370,6 @@ def write_route_excels(
     paths: list[Path] = []
     route_numbers_by_district: dict[str, int] = {}
     for correction in corrections:
-        if not correction.stops:
-            continue
         district_name = route_templates_folder_name(correction.route.district_name)
         route_number = route_numbers_by_district.get(district_name, 0) + 1
         route_numbers_by_district[district_name] = route_number

@@ -1,5 +1,8 @@
+import xml.etree.ElementTree as ET
+
+from kmz_route_corrector.kml_parser import kml_tag
 from kmz_route_corrector.models import Route, Stop
-from kmz_route_corrector.stop_detector import order_stops
+from kmz_route_corrector.stop_detector import extract_stops_from_route, order_stops
 
 
 def make_stop(name, lon, lat, index):
@@ -74,3 +77,58 @@ def test_keeps_kml_order_without_line_or_p_numbers():
     assert [stop.name for stop in stops] == ["Sector A", "Sector B"]
     assert method == "orden_kml"
     assert warnings
+
+
+def test_extract_stops_ignores_direct_school_point():
+    school = make_point_placemark("Centro Educativo Canta Rana")
+    stop = make_point_placemark("P20")
+    route = make_extract_route([school, stop])
+
+    stops = extract_stops_from_route(route)
+
+    assert [stop.name for stop in stops] == ["P20"]
+
+
+def test_extract_stops_keeps_named_stop_with_school_label():
+    route = make_extract_route([make_point_placemark("P20 - Centro Educativo Canta Rana")])
+
+    stops = extract_stops_from_route(route)
+
+    assert [stop.name for stop in stops] == ["P20 - Centro Educativo Canta Rana"]
+
+
+def test_extract_stops_keeps_school_like_name_inside_paradas_folder():
+    folder = make_folder("Paradas")
+    folder.append(make_point_placemark("Centro Educativo Canta Rana"))
+    route = make_extract_route([folder])
+
+    stops = extract_stops_from_route(route)
+
+    assert [stop.name for stop in stops] == ["Centro Educativo Canta Rana"]
+
+
+def make_extract_route(source_nodes):
+    return Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=[],
+        stop_source_nodes=source_nodes,
+        stop_source_parents=[],
+        stops=[],
+    )
+
+
+def make_folder(name):
+    folder = ET.Element(kml_tag("Folder"))
+    ET.SubElement(folder, kml_tag("name")).text = name
+    return folder
+
+
+def make_point_placemark(name):
+    placemark = ET.Element(kml_tag("Placemark"))
+    ET.SubElement(placemark, kml_tag("name")).text = name
+    point = ET.SubElement(placemark, kml_tag("Point"))
+    ET.SubElement(point, kml_tag("coordinates")).text = "-69.0,18.0,0"
+    return placemark
