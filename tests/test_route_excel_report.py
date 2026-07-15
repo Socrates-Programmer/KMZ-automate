@@ -358,6 +358,38 @@ def test_detect_routes_uses_corrected_stops_when_original_stops_are_absent():
     assert [stop.name for stop in routes[0].stops] == ["P1"]
 
 
+def test_detect_routes_keeps_multiple_elevation_profiles():
+    kml = """<kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+      <Folder>
+        <name>Distrito 08-01 SJM</name>
+        <Folder>
+          <name>Ruta #6</name>
+          <Placemark>
+            <name>Perfil 1</name>
+            <LineString><coordinates>-70.1,19.1,0 -70.2,19.2,0</coordinates></LineString>
+          </Placemark>
+          <Placemark>
+            <name>Perfil 2</name>
+            <LineString><coordinates>-70.3,19.3,0 -70.4,19.4,0</coordinates></LineString>
+          </Placemark>
+          <Folder>
+            <name>Paradas</name>
+            <Placemark><name>P1</name><Point><coordinates>-70.3,19.3,0</coordinates></Point></Placemark>
+          </Folder>
+        </Folder>
+      </Folder>
+    </Document>
+    </kml>"""
+    root = ET.fromstring(kml)
+
+    routes, _ = detect_routes(root)
+
+    assert len(routes) == 1
+    assert len(routes[0].line_coord_sets) == 2
+    assert any("multiples elevation profiles" in warning for warning in routes[0].warnings)
+
+
 def test_template_sheet_preserves_excel_compatibility_namespaces():
     template_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"

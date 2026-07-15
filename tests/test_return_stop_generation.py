@@ -1,5 +1,5 @@
 from kmz_route_corrector.core import correct_route, prune_generated_duplicate_stops
-from kmz_route_corrector.geometry import haversine_meters
+from kmz_route_corrector.geometry import distance_to_line_meters, haversine_meters
 from kmz_route_corrector.models import CorrectedStop, Route, School, SchoolMatch, Stop
 
 
@@ -165,6 +165,32 @@ def test_removed_stop_farther_than_150_meters_from_route_is_reported():
 
     assert any(irregularity.kind == "removed_far_stop" for irregularity in correction.irregularities)
     assert correction.irregularities[0].distance_meters > 150
+
+
+def test_stop_near_second_elevation_profile_is_not_reported_far_from_route():
+    first_profile = [(-69.2, 18.0, None), (-69.0, 18.0, None)]
+    second_profile = [(-69.2, 18.01, None), (-69.0, 18.01, None)]
+    route = Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=first_profile,
+        line_coord_sets=[first_profile, second_profile],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        stops=[
+            make_stop("P1 vieja", -69.2, 18.01, 0),
+            make_stop("P2 vieja", -69.1999, 18.01, 1),
+        ],
+    )
+
+    correction = correct_route(route, [], 10, 100)
+
+    assert any("P2 vieja se unio a P1 vieja" in warning for warning in correction.warnings)
+    assert not any(irregularity.kind == "removed_far_stop" for irregularity in correction.irregularities)
+    assert distance_to_line_meters(correction.stops[0].new_lon, correction.stops[0].new_lat, second_profile) <= 15
+    assert distance_to_line_meters(correction.stops[0].new_lon, correction.stops[0].new_lat, first_profile) > 150
 
 
 def test_school_near_route_without_nearby_stop_is_reported():
