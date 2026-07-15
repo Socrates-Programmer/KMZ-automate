@@ -19,7 +19,7 @@ from .google_places import GooglePlacesSchoolLookup
 from .irregularity_report import write_irregularities_pdf
 from .kml_writer import apply_corrections
 from .kmz_io import make_output_paths, read_kmz, write_kml, write_kmz
-from .models import CorrectedStop, Irregularity, ProcessResult, Route, RouteCorrection, School, SchoolMatch, Stop, Summary
+from .models import Coordinate, CorrectedStop, Irregularity, ProcessResult, Route, RouteCorrection, School, SchoolMatch, Stop, Summary
 from .osm_overpass import OpenStreetMapSchoolLookup
 from .report import (
     ROUTE_EXCEL_TEMPLATE_BULK,
@@ -271,10 +271,8 @@ def correct_route(
     irregularities.extend(find_route_gap_irregularities(route, original_ordered_stops))
 
     ordered_stops, dedupe_warnings, dedupe_irregularities = dedupe_ordered_stops(
-        route.name,
-        route.district_name,
+        route,
         ordered_stops,
-        route.line_coords,
         schools,
         school_radius_meters,
         offset_meters,
@@ -284,10 +282,11 @@ def correct_route(
 
     for idx, stop in enumerate(ordered_stops, start=1):
         base_name = f"P{idx}"
+        stop_line_coords = nearest_route_line_for_point(route, stop.lon, stop.lat)
         new_lon, new_lat, side_warnings = place_stop_on_route_side(
             stop.lon,
             stop.lat,
-            route.line_coords,
+            stop_line_coords,
             ordered_stops,
             idx - 1,
             offset_meters,
@@ -315,10 +314,11 @@ def correct_route(
 
     for idx, (stop_index, stop) in enumerate(reversed(list(enumerate(ordered_stops))), start=len(ordered_stops) + 1):
         base_name = f"P{idx}"
+        stop_line_coords = nearest_route_line_for_point(route, stop.lon, stop.lat)
         new_lon, new_lat, side_warnings = place_stop_on_route_side(
             stop.lon,
             stop.lat,
-            route.line_coords,
+            stop_line_coords,
             ordered_stops,
             stop_index,
             offset_meters,
@@ -376,10 +376,8 @@ def correct_route(
 
 
 def dedupe_ordered_stops(
-    route_name: str,
-    district_name: str,
+    route: Route,
     ordered_stops: list[Stop],
-    line_coords,
     schools: list[School],
     school_radius_meters: float,
     offset_meters: float,
@@ -390,14 +388,14 @@ def dedupe_ordered_stops(
     irregularities: list[Irregularity] = []
 
     for index, stop in enumerate(ordered_stops):
-        meta = stop_dedupe_meta(stop, line_coords, ordered_stops, index, schools, school_radius_meters, offset_meters)
+        meta = stop_dedupe_meta(stop, route, ordered_stops, index, schools, school_radius_meters, offset_meters)
         if kept and should_merge_stop(kept_meta[-1], meta):
             school_name = meta["school"].name if meta["school"] else "sin centro educativo"
             warnings.append(
                 f"Parada duplicada consolidada cerca de {school_name}: "
                 f"{stop.name or '(sin nombre)'} se unio a {kept[-1].name or '(sin nombre)'}."
             )
-            irregularity = removed_stop_irregularity(route_name, district_name, stop, kept[-1], line_coords, meta)
+            irregularity = removed_stop_irregularity(route.name, route.district_name, stop, kept[-1], meta.get("line_coords", []), meta)
             if irregularity:
                 irregularities.append(irregularity)
             continue
@@ -893,13 +891,51 @@ def find_created_stop_mismatch_irregularities(
     return irregularities
 
 
+def route_line_sets(route: Route) -> list[list[Coordinate]]:
+    lines = [line for line in route.line_coord_sets if len(line) >= 2]
+    if lines:
+        return lines
+    return [route.line_coords] if len(route.line_coords) >= 2 else []
+
+
+def nearest_route_line_for_point(route: Route, lon: float, lat: float):
+    line_coords, _ = nearest_route_line_for_point_with_index(route, lon, lat)
+    return line_coords
+
+
+def nearest_route_line_for_point_with_index(route: Route, lon: float, lat: float):
+    lines = route_line_sets(route)
+    if not lines:
+        return [], None
+
+    best_index = 0
+    best_line = lines[0]
+    best_distance = distance_to_line_meters(lon, lat, best_line)
+    for index, line_coords in enumerate(lines[1:], start=1):
+        distance = distance_to_line_meters(lon, lat, line_coords)
+        if distance is None:
+            continue
+        if best_distance is None or distance < best_distance:
+            best_index = index
+            best_line = line_coords
+            best_distance = distance
+    return best_line, best_index
+
+
+def nearest_route_line_distance(route: Route, lon: float, lat: float):
+    line_coords, line_index = nearest_route_line_for_point_with_index(route, lon, lat)
+    if not line_coords:
+        return None, [], line_index
+    return distance_to_line_meters(lon, lat, line_coords), line_coords, line_index
+
+
 def find_schools_near_route_without_stops(
     route: Route,
     schools: list[School],
     corrected_stops: list[CorrectedStop],
     school_radius_meters: float,
 ) -> list[Irregularity]:
-    if not schools or not route.line_coords:
+    if not schools or not route_line_sets(route):
         return []
 
     irregularities: list[Irregularity] = []
@@ -910,7 +946,7 @@ def find_schools_near_route_without_stops(
             continue
         seen.add(key)
 
-        route_distance = distance_to_line_meters(school.lon, school.lat, route.line_coords)
+        route_distance, line_coords, _ = nearest_route_line_distance(route, school.lon, school.lat)
         if route_distance is None or route_distance > school_radius_meters:
             continue
 
@@ -942,7 +978,7 @@ def find_schools_near_route_without_stops(
                 ),
                 lon=school.lon,
                 lat=school.lat,
-                line_coords=list(route.line_coords),
+                line_coords=list(line_coords),
                 points=points,
                 distance_meters=measured_distance,
             )
@@ -967,12 +1003,37 @@ def closest_corrected_stop_to_school(
 
 
 def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> list[Irregularity]:
-    route_length = line_length_meters(route.line_coords)
+    lines = route_line_sets(route)
+    if not lines:
+        return []
+
+    if len(lines) == 1:
+        return find_route_gap_irregularities_for_line(route, ordered_stops, lines[0], None)
+
+    irregularities: list[Irregularity] = []
+    for line_index, line_coords in enumerate(lines):
+        line_stops = [
+            stop
+            for stop in ordered_stops
+            if nearest_route_line_for_point_with_index(route, stop.lon, stop.lat)[1] == line_index
+        ]
+        irregularities.extend(find_route_gap_irregularities_for_line(route, line_stops, line_coords, line_index + 1))
+    return irregularities
+
+
+def find_route_gap_irregularities_for_line(
+    route: Route,
+    ordered_stops: list[Stop],
+    line_coords,
+    profile_number: int | None,
+) -> list[Irregularity]:
+    route_length = line_length_meters(line_coords)
     if route_length <= LONG_ROUTE_WITHOUT_STOPS_METERS:
         return []
 
+    profile_text = f" en el perfil {profile_number}" if profile_number is not None else ""
     if not ordered_stops:
-        midpoint = point_at_distance_along_line(route.line_coords, route_length / 2)
+        midpoint = point_at_distance_along_line(line_coords, route_length / 2)
         if midpoint is None:
             return []
         lon, lat = midpoint
@@ -983,12 +1044,12 @@ def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> li
                 kind="route_gap",
                 title="Ruta sin paradas detectadas",
                 description=(
-                    f"La ruta mide {route_length:.1f} m y no tiene paradas detectadas. "
+                    f"La ruta{profile_text} mide {route_length:.1f} m y no tiene paradas detectadas. "
                     f"Umbral de tramo sin paradas: {LONG_ROUTE_WITHOUT_STOPS_METERS:.0f} m."
                 ),
                 lon=lon,
                 lat=lat,
-                line_coords=list(route.line_coords),
+                line_coords=list(line_coords),
                 points=[("Ruta", lon, lat)],
                 distance_meters=route_length,
             )
@@ -996,16 +1057,16 @@ def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> li
 
     ranked: list[tuple[float, Stop]] = []
     for stop in ordered_stops:
-        station = distance_along_line_meters(stop.lon, stop.lat, route.line_coords)
+        station = distance_along_line_meters(stop.lon, stop.lat, line_coords)
         if station is not None:
             ranked.append((station, stop))
     if not ranked:
         return []
 
     ranked.sort(key=lambda item: item[0])
-    anchors: list[tuple[float, str, float, float]] = [(0.0, "Inicio ruta", route.line_coords[0][0], route.line_coords[0][1])]
+    anchors: list[tuple[float, str, float, float]] = [(0.0, "Inicio ruta", line_coords[0][0], line_coords[0][1])]
     anchors.extend((station, f"P{index}", stop.lon, stop.lat) for index, (station, stop) in enumerate(ranked, start=1))
-    anchors.append((route_length, "Fin ruta", route.line_coords[-1][0], route.line_coords[-1][1]))
+    anchors.append((route_length, "Fin ruta", line_coords[-1][0], line_coords[-1][1]))
 
     irregularities: list[Irregularity] = []
     for previous, current in zip(anchors, anchors[1:]):
@@ -1014,7 +1075,7 @@ def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> li
         gap = current_station - previous_station
         if gap <= LONG_ROUTE_WITHOUT_STOPS_METERS:
             continue
-        midpoint = point_at_distance_along_line(route.line_coords, previous_station + gap / 2)
+        midpoint = point_at_distance_along_line(line_coords, previous_station + gap / 2)
         if midpoint is None:
             continue
         lon, lat = midpoint
@@ -1025,12 +1086,12 @@ def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> li
                 kind="route_gap",
                 title="Tramo largo sin paradas",
                 description=(
-                    f"Hay {gap:.1f} m de recorrido sin paradas entre {previous_label} y {current_label}. "
+                    f"Hay {gap:.1f} m de recorrido sin paradas{profile_text} entre {previous_label} y {current_label}. "
                     f"Umbral: {LONG_ROUTE_WITHOUT_STOPS_METERS:.0f} m."
                 ),
                 lon=lon,
                 lat=lat,
-                line_coords=list(route.line_coords),
+                line_coords=list(line_coords),
                 points=[
                     (previous_label, previous_lon, previous_lat),
                     (current_label, current_lon, current_lat),
@@ -1043,13 +1104,14 @@ def find_route_gap_irregularities(route: Route, ordered_stops: list[Stop]) -> li
 
 def stop_dedupe_meta(
     stop: Stop,
-    line_coords,
+    route: Route,
     ordered_stops: list[Stop],
     stop_index: int,
     schools: list[School],
     school_radius_meters: float,
     offset_meters: float,
 ) -> dict:
+    line_coords, line_index = nearest_route_line_for_point_with_index(route, stop.lon, stop.lat)
     placed_lon, placed_lat, _ = place_stop_on_route_side(
         stop.lon,
         stop.lat,
@@ -1067,6 +1129,8 @@ def stop_dedupe_meta(
         "placed_lat": placed_lat,
         "station": distance_along_line_meters(stop.lon, stop.lat, line_coords),
         "route_distance": distance_to_line_meters(stop.lon, stop.lat, line_coords),
+        "line_index": line_index,
+        "line_coords": line_coords,
         "school": match.school if match and match.school else None,
     }
 
@@ -1080,7 +1144,11 @@ def should_merge_stop(previous: dict, current: dict) -> bool:
         current["placed_lat"],
     )
     station_gap = None
-    if previous["station"] is not None and current["station"] is not None:
+    if (
+        previous["station"] is not None
+        and current["station"] is not None
+        and previous.get("line_index") == current.get("line_index")
+    ):
         station_gap = abs(previous["station"] - current["station"])
 
     if station_gap is not None and station_gap <= NEAR_CONSECUTIVE_STOP_FLOW_METERS:

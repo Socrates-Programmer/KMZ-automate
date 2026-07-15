@@ -93,10 +93,10 @@ def nearest_document(element: ET.Element, parents: dict[ET.Element, ET.Element])
 
 def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[ET.Element, ET.Element]) -> Route | None:
     name = name_of(folder) or "Ruta sin nombre"
-    line_pm = first_direct_line(folder)
-    if line_pm is None:
-        line_pm = first_line_in_direct_child(folder)
-    line_coords = line_coordinates(line_pm) if line_pm is not None else []
+    line_placemarks = route_line_placemarks(folder)
+    line_pm = line_placemarks[0] if line_placemarks else None
+    line_coord_sets = [coords for coords in (line_coordinates(placemark) for placemark in line_placemarks) if len(coords) >= 2]
+    line_coords = line_coord_sets[0] if line_coord_sets else []
 
     paradas_folders = [child for child in direct_folders(folder) if is_paradas_folder(child)]
     corrected_folders = [child for child in direct_folders(folder) if is_corrected_folder(child)]
@@ -104,6 +104,8 @@ def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[E
     warnings: list[str] = []
     if len(stop_folders) > 1:
         warnings.append("La ruta tiene multiples carpetas de paradas; se unieron y deduplicaron.")
+    if len(line_coord_sets) > 1:
+        warnings.append("La ruta tiene multiples elevation profiles; se midieron paradas contra el perfil mas cercano.")
 
     if stop_folders:
         stop_nodes = [*stop_folders]
@@ -124,6 +126,7 @@ def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[E
         is_no_operar="no operar" in name.lower(),
         source_kind="folder",
         district_name=nearest_parent_folder_name(folder, parents) or name_of(document) or "Sin distrito",
+        line_coord_sets=line_coord_sets,
     )
 
 
@@ -140,19 +143,21 @@ def detect_document_level_routes(root: ET.Element, folder_routes: set[ET.Element
         if not stop_folders:
             continue
         line_pm = direct_lines[0]
+        line_coord_sets = [coords for coords in (line_coordinates(placemark) for placemark in direct_lines) if len(coords) >= 2]
         name = name_of(line_pm) or name_of(document) or "Ruta sin nombre"
         route = Route(
             name=name,
             container=document,
             document=document,
             line_placemark=line_pm,
-            line_coords=line_coordinates(line_pm),
+            line_coords=line_coord_sets[0] if line_coord_sets else line_coordinates(line_pm),
             stop_source_nodes=stop_folders,
             stop_source_parents=[document],
             warnings=[],
             is_no_operar="no operar" in name.lower(),
             source_kind="document",
             district_name=name_of(document) or "Sin distrito",
+            line_coord_sets=line_coord_sets,
         )
         routes.append(route)
     return routes
@@ -203,3 +208,12 @@ def first_line_in_direct_child(folder: ET.Element) -> ET.Element | None:
         if lines:
             return lines[0]
     return None
+
+
+def route_line_placemarks(folder: ET.Element) -> list[ET.Element]:
+    lines = list(direct_line_placemarks(folder))
+    for child in direct_folders(folder):
+        if is_route_like_folder_name(name_of(child)):
+            continue
+        lines.extend(direct_line_placemarks(child))
+    return lines

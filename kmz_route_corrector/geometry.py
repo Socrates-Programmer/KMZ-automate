@@ -198,6 +198,46 @@ def order_stops_by_line(stops: list[Stop], line_coords: list[Coordinate]) -> tup
     return [stop for _, _, stop in ranked], "linea", warnings
 
 
+def order_stops_by_lines(stops: list[Stop], line_coord_sets: list[list[Coordinate]]) -> tuple[list[Stop], str, list[str]]:
+    valid_lines = [line for line in line_coord_sets if len(line) >= 2]
+    if not valid_lines:
+        return stops, "orden_kml", ["No hay LineString suficiente; se mantuvo el orden KML."]
+    if len(valid_lines) == 1:
+        return order_stops_by_line(stops, valid_lines[0])
+
+    ranked: list[tuple[int, float, int, Stop]] = []
+    for idx, stop in enumerate(stops):
+        line_index, station = nearest_line_station(stop.lon, stop.lat, valid_lines)
+        if line_index is None or station is None:
+            return stops, "orden_kml", ["No se pudo proyectar una parada sobre las lineas; se mantuvo el orden KML."]
+        ranked.append((line_index, station, idx, stop))
+
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [stop for _, _, _, stop in ranked], "lineas", [
+        "La ruta tiene multiples LineString; las paradas se ordenaron por el perfil mas cercano."
+    ]
+
+
+def nearest_line_station(
+    lon: float,
+    lat: float,
+    line_coord_sets: list[list[Coordinate]],
+) -> tuple[int | None, float | None]:
+    best_index: int | None = None
+    best_station: float | None = None
+    best_distance: float | None = None
+    for index, line_coords in enumerate(line_coord_sets):
+        distance = distance_to_line_meters(lon, lat, line_coords)
+        station = distance_along_line_meters(lon, lat, line_coords)
+        if distance is None or station is None:
+            continue
+        if best_distance is None or distance < best_distance:
+            best_index = index
+            best_station = station
+            best_distance = distance
+    return best_index, best_station
+
+
 def orient_line_for_stop_sequence(line_coords: list[Coordinate], ordered_stops: list[Stop]) -> list[Coordinate]:
     if len(line_coords) < 2 or len(ordered_stops) < 2:
         return line_coords

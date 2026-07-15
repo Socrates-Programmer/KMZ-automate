@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 
-from .geometry import order_stops_by_line
+from .geometry import order_stops_by_line, order_stops_by_lines
 from .kml_parser import (
     direct_folders,
     direct_placemarks,
@@ -118,6 +118,8 @@ def order_stops(route: Route) -> tuple[list[Stop], str, list[str]]:
     if not stops:
         return [], "sin_paradas", ["La ruta no tiene paradas detectables."]
 
+    if route.line_coord_sets:
+        return order_stops_by_lines(stops, route.line_coord_sets)
     if route.line_coords:
         return order_stops_by_line(stops, route.line_coords)
 

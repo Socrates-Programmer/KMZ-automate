@@ -50,6 +50,7 @@ class Route:
     is_no_operar: bool = False
     source_kind: str = "folder"
     district_name: str = "Sin distrito"
+    line_coord_sets: list[list[Coordinate]] = field(default_factory=list)
 
 
 @dataclass
