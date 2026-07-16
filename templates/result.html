@@ -1,33 +1,26 @@
-<!doctype html>
-<html lang="es">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>KMZ corregido</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
-    <main class="shell">
-      <section class="panel">
-        <h1>KMZ corregido</h1>
-        <dl class="summary">
-          <div><dt>Rutas procesadas</dt><dd>{{ result.summary.routes_processed }}</dd></div>
-          <div><dt>Paradas originales</dt><dd>{{ result.summary.original_stops_detected }}</dd></div>
-          <div><dt>Paradas nuevas</dt><dd>{{ result.summary.new_stops_created }}</dd></div>
-          <div><dt>Centros educativos</dt><dd>{{ result.summary.schools_detected }}</dd></div>
-          <div><dt>Paradas con centro</dt><dd>{{ result.summary.stops_with_school }}</dd></div>
-          <div><dt>Excel por ruta</dt><dd>{{ result.route_excel_paths|length }}</dd></div>
-          <div><dt>Recorrido CSV</dt><dd>{{ 'si' if result.route_flow_csv_path else 'no' }}</dd></div>
-          <div><dt>Irregularidades</dt><dd>{{ result.summary.irregularities_count }}</dd></div>
-          <div><dt>Reporte PDF</dt><dd>{{ 'si' if result.irregularities_report_pdf_path else 'no' }}</dd></div>
-          <div><dt>Advertencias</dt><dd>{{ result.summary.warnings_count }}</dd></div>
-        </dl>
+{% extends "base.html" %}
 
-        <div class="actions">
-          <a class="button" href="{{ download_url }}">Descargar ZIP completo</a>
-          <a class="secondary" href="{{ url_for('index') }}">Procesar otro KMZ</a>
-        </div>
-      </section>
-    </main>
-  </body>
-</html>
+{% block title %}KMZ corregido{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1>KMZ corregido</h1>
+    <dl class="summary">
+      <div><dt>Rutas procesadas</dt><dd>{{ result.summary.routes_processed }}</dd></div>
+      <div><dt>Paradas originales</dt><dd>{{ result.summary.original_stops_detected }}</dd></div>
+      <div><dt>Paradas nuevas</dt><dd>{{ result.summary.new_stops_created }}</dd></div>
+      <div><dt>Centros educativos</dt><dd>{{ result.summary.schools_detected }}</dd></div>
+      <div><dt>Paradas con centro</dt><dd>{{ result.summary.stops_with_school }}</dd></div>
+      <div><dt>Excel por ruta</dt><dd>{{ result.route_excel_paths|length }}</dd></div>
+      <div><dt>Recorrido CSV</dt><dd>{{ 'si' if result.route_flow_csv_path else 'no' }}</dd></div>
+      <div><dt>Irregularidades</dt><dd>{{ result.summary.irregularities_count }}</dd></div>
+      <div><dt>Reporte PDF</dt><dd>{{ 'si' if result.irregularities_report_pdf_path else 'no' }}</dd></div>
+      <div><dt>Advertencias</dt><dd>{{ result.summary.warnings_count }}</dd></div>
+    </dl>
+
+    <div class="actions">
+      <a class="button" href="{{ download_url }}">Descargar ZIP completo</a>
+      <a class="secondary" href="{{ url_for('index') }}">Procesar otro KMZ</a>
+    </div>
+  </section>
+{% endblock %}

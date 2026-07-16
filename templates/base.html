@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Corrector KMZ{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <nav class="nav">
+        <a class="brand" href="{{ url_for('index') }}">Rutas escolares</a>
+        <div class="nav-links">
+          <a class="nav-link {% if active_page == 'kmz' %}active{% endif %}" href="{{ url_for('index') }}">Corrector KMZ</a>
+          <a class="nav-link {% if active_page == 'uffizio' %}active{% endif %}" href="{{ url_for('uffizio') }}">Crear ruta Uffizio</a>
+        </div>
+      </nav>
+    </header>
+    <main class="shell">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 
+from .geometry import sort_line_coord_sets_by_length
 from .kml_parser import (
     direct_folders,
     direct_placemarks,
@@ -95,7 +96,9 @@ def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[E
     name = name_of(folder) or "Ruta sin nombre"
     line_placemarks = route_line_placemarks(folder)
     line_pm = line_placemarks[0] if line_placemarks else None
-    line_coord_sets = [coords for coords in (line_coordinates(placemark) for placemark in line_placemarks) if len(coords) >= 2]
+    line_coord_sets = sort_line_coord_sets_by_length([
+        coords for coords in (line_coordinates(placemark) for placemark in line_placemarks) if len(coords) >= 2
+    ])
     line_coords = line_coord_sets[0] if line_coord_sets else []
 
     paradas_folders = [child for child in direct_folders(folder) if is_paradas_folder(child)]
@@ -105,7 +108,7 @@ def build_folder_route(folder: ET.Element, document: ET.Element, parents: dict[E
     if len(stop_folders) > 1:
         warnings.append("La ruta tiene multiples carpetas de paradas; se unieron y deduplicaron.")
     if len(line_coord_sets) > 1:
-        warnings.append("La ruta tiene multiples elevation profiles; se midieron paradas contra el perfil mas cercano.")
+        warnings.append("La ruta tiene multiples elevation profiles; se uso primero el perfil de mayor longitud y luego los menores.")
 
     if stop_folders:
         stop_nodes = [*stop_folders]
@@ -143,7 +146,9 @@ def detect_document_level_routes(root: ET.Element, folder_routes: set[ET.Element
         if not stop_folders:
             continue
         line_pm = direct_lines[0]
-        line_coord_sets = [coords for coords in (line_coordinates(placemark) for placemark in direct_lines) if len(coords) >= 2]
+        line_coord_sets = sort_line_coord_sets_by_length([
+            coords for coords in (line_coordinates(placemark) for placemark in direct_lines) if len(coords) >= 2
+        ])
         name = name_of(line_pm) or name_of(document) or "Ruta sin nombre"
         route = Route(
             name=name,

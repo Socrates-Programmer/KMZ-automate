@@ -14,6 +14,7 @@ from .geometry import (
     line_length_meters,
     place_stop_on_route_side,
     point_at_distance_along_line,
+    sort_line_coord_sets_by_length,
 )
 from .google_places import GooglePlacesSchoolLookup
 from .irregularity_report import write_irregularities_pdf
@@ -892,7 +893,7 @@ def find_created_stop_mismatch_irregularities(
 
 
 def route_line_sets(route: Route) -> list[list[Coordinate]]:
-    lines = [line for line in route.line_coord_sets if len(line) >= 2]
+    lines = sort_line_coord_sets_by_length(route.line_coord_sets)
     if lines:
         return lines
     return [route.line_coords] if len(route.line_coords) >= 2 else []

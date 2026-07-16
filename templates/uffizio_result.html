@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Ruta Uffizio creada{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1>Ruta Uffizio creada</h1>
+    <p class="lead">{{ output_name }}</p>
+
+    <div class="actions">
+      <a class="button" href="{{ download_url }}">Descargar Excel</a>
+      <a class="secondary" href="{{ url_for('uffizio') }}">Crear otra ruta</a>
+    </div>
+  </section>
+{% endblock %}

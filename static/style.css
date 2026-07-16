@@ -23,9 +23,54 @@ body {
   color: var(--text);
 }
 
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav {
+  width: min(960px, calc(100% - 32px));
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.brand {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.nav-link {
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 9px 12px;
+  text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  background: #e8f1f4;
+  color: var(--accent-dark);
+}
+
 .shell {
   width: min(760px, calc(100% - 32px));
-  margin: 48px auto;
+  margin: 32px auto 48px;
 }
 
 .panel {
@@ -196,7 +241,79 @@ dd {
   flex-wrap: wrap;
 }
 
+
+.bus-section {
+  display: grid;
+  gap: 12px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.bus-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bus-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.secondary-button,
+.icon-button {
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--accent);
+}
+
+.secondary-button:hover,
+.icon-button:hover {
+  background: #e8f1f4;
+  color: var(--accent-dark);
+}
+
 @media (max-width: 640px) {
+
+  .section-heading,
+  .bus-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading {
+    flex-direction: column;
+  }
+  .nav {
+    width: min(100% - 20px, 760px);
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 0;
+  }
+
+  .nav-links {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .nav-link {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
   .shell {
     width: min(100% - 20px, 760px);
     margin: 20px auto;

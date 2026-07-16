@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Crear ruta Uffizio{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1>Crear ruta Uffizio</h1>
+    <p class="lead">Sube la plantilla de ruta y descarga el BulkCreateTrip listo para cargar.</p>
+
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('create_uffizio_route') }}" method="post" enctype="multipart/form-data">
+      <label>
+        Plantilla de ruta
+        <input type="file" name="route_excel_file" accept=".xlsx" required>
+      </label>
+
+      <label>
+        Trip Type
+        <select name="trip_type" required>
+          {% for trip_type in trip_type_options %}
+            <option value="{{ trip_type }}" {% if trip_type == 'Pickup' %}selected{% endif %}>{{ trip_type }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <section class="bus-section" aria-labelledby="bus-section-title">
+        <div class="section-heading">
+          <h2 id="bus-section-title">Buses</h2>
+          <button class="secondary-button" type="button" id="add-bus-button">Agregar bus</button>
+        </div>
+
+        <div class="bus-list" id="bus-list">
+          <div class="bus-row">
+            <label>
+              Vehiculo
+              <select name="vehicles" required>
+                {% for vehicle in vehicle_options %}
+                  <option value="{{ vehicle }}" {% if vehicle == 'vehicle 2' %}selected{% endif %}>{{ vehicle }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <button class="icon-button remove-bus" type="button" aria-label="Quitar bus" hidden>Quitar</button>
+          </div>
+        </div>
+      </section>
+
+      <button type="submit">Crear BulkCreateTrip</button>
+    </form>
+  </section>
+
+  <template id="bus-row-template">
+    <div class="bus-row">
+      <label>
+        Vehiculo
+        <select name="vehicles" required>
+          {% for vehicle in vehicle_options %}
+            <option value="{{ vehicle }}">{{ vehicle }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="icon-button remove-bus" type="button" aria-label="Quitar bus">Quitar</button>
+    </div>
+  </template>
+
+  <script>
+    const busList = document.querySelector("#bus-list");
+    const addBusButton = document.querySelector("#add-bus-button");
+    const busTemplate = document.querySelector("#bus-row-template");
+
+    function syncRemoveButtons() {
+      const rows = busList.querySelectorAll(".bus-row");
+      rows.forEach((row) => {
+        const removeButton = row.querySelector(".remove-bus");
+        removeButton.hidden = rows.length === 1;
+      });
+    }
+
+    addBusButton.addEventListener("click", () => {
+      busList.appendChild(busTemplate.content.cloneNode(true));
+      syncRemoveButtons();
+    });
+
+    busList.addEventListener("click", (event) => {
+      const removeButton = event.target.closest(".remove-bus");
+      if (!removeButton) {
+        return;
+      }
+      removeButton.closest(".bus-row").remove();
+      syncRemoveButtons();
+    });
+
+    syncRemoveButtons();
+  </script>
+{% endblock %}

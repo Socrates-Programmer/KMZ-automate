@@ -193,6 +193,31 @@ def test_stop_near_second_elevation_profile_is_not_reported_far_from_route():
     assert distance_to_line_meters(correction.stops[0].new_lon, correction.stops[0].new_lat, first_profile) > 150
 
 
+def test_multiple_profiles_are_processed_longest_first():
+    short_profile = [(-69.2, 18.0, None), (-69.19, 18.0, None)]
+    long_profile = [(-69.2, 18.01, None), (-69.18, 18.01, None), (-69.16, 18.01, None)]
+    route = Route(
+        name="Ruta test",
+        container=None,
+        document=None,
+        line_placemark=None,
+        line_coords=short_profile,
+        line_coord_sets=[short_profile, long_profile],
+        stop_source_nodes=[],
+        stop_source_parents=[],
+        stops=[
+            make_stop("P corta", -69.2, 18.0, 0),
+            make_stop("P larga", -69.2, 18.01, 1),
+        ],
+    )
+
+    correction = correct_route(route, [], 10, 100)
+
+    assert correction.ordering_method == "lineas"
+    assert correction.stops[0].original_name == "P larga"
+    assert correction.stops[1].original_name == "P corta"
+
+
 def test_school_near_route_without_nearby_stop_is_reported():
     route = Route(
         name="Ruta test",

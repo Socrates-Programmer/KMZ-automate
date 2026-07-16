@@ -152,6 +152,11 @@ def line_length_meters(line_coords: list[Coordinate]) -> float:
     return sum(math.hypot(bx - ax, by - ay) for (ax, ay), (bx, by) in zip(line_xy, line_xy[1:]))
 
 
+def sort_line_coord_sets_by_length(line_coord_sets: list[list[Coordinate]]) -> list[list[Coordinate]]:
+    valid_lines = [line for line in line_coord_sets if len(line) >= 2]
+    return sorted(valid_lines, key=line_length_meters, reverse=True)
+
+
 def point_at_distance_along_line(line_coords: list[Coordinate], distance_meters: float) -> tuple[float, float] | None:
     if len(line_coords) < 2:
         return None
@@ -199,7 +204,7 @@ def order_stops_by_line(stops: list[Stop], line_coords: list[Coordinate]) -> tup
 
 
 def order_stops_by_lines(stops: list[Stop], line_coord_sets: list[list[Coordinate]]) -> tuple[list[Stop], str, list[str]]:
-    valid_lines = [line for line in line_coord_sets if len(line) >= 2]
+    valid_lines = sort_line_coord_sets_by_length(line_coord_sets)
     if not valid_lines:
         return stops, "orden_kml", ["No hay LineString suficiente; se mantuvo el orden KML."]
     if len(valid_lines) == 1:
@@ -214,7 +219,7 @@ def order_stops_by_lines(stops: list[Stop], line_coord_sets: list[list[Coordinat
 
     ranked.sort(key=lambda item: (item[0], item[1], item[2]))
     return [stop for _, _, _, stop in ranked], "lineas", [
-        "La ruta tiene multiples LineString; las paradas se ordenaron por el perfil mas cercano."
+        "La ruta tiene multiples LineString; se uso primero el perfil de mayor longitud y luego los menores."
     ]
 
 

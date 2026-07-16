@@ -367,11 +367,11 @@ def test_detect_routes_keeps_multiple_elevation_profiles():
           <name>Ruta #6</name>
           <Placemark>
             <name>Perfil 1</name>
-            <LineString><coordinates>-70.1,19.1,0 -70.2,19.2,0</coordinates></LineString>
+            <LineString><coordinates>-70.1,19.1,0 -70.11,19.11,0</coordinates></LineString>
           </Placemark>
           <Placemark>
             <name>Perfil 2</name>
-            <LineString><coordinates>-70.3,19.3,0 -70.4,19.4,0</coordinates></LineString>
+            <LineString><coordinates>-70.3,19.3,0 -70.4,19.4,0 -70.5,19.5,0</coordinates></LineString>
           </Placemark>
           <Folder>
             <name>Paradas</name>
@@ -387,7 +387,10 @@ def test_detect_routes_keeps_multiple_elevation_profiles():
 
     assert len(routes) == 1
     assert len(routes[0].line_coord_sets) == 2
-    assert any("multiples elevation profiles" in warning for warning in routes[0].warnings)
+    assert routes[0].line_coords == routes[0].line_coord_sets[0]
+    assert routes[0].line_coord_sets[0][0][:2] == (-70.3, 19.3)
+    assert routes[0].line_coord_sets[1][0][:2] == (-70.1, 19.1)
+    assert any("perfil de mayor longitud" in warning for warning in routes[0].warnings)
 
 
 def test_template_sheet_preserves_excel_compatibility_namespaces():

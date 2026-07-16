@@ -1,122 +1,23 @@
-<!doctype html>
-<html lang="es">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Corrector KMZ de rutas escolares</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
-    <main class="shell">
-      <section class="panel">
-        <h1>Corrector KMZ</h1>
-        <p class="lead">Sube un KMZ de rutas escolares y descarga el paquete corregido para revisarlo en Google Earth Pro.</p>
+{% extends "base.html" %}
 
-        {% if error %}
-          <div class="alert">{{ error }}</div>
-        {% endif %}
+{% block title %}Corrector KMZ de rutas escolares{% endblock %}
 
-        <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data">
-          <label>
-            Archivo KMZ
-            <input type="file" name="kmz_file" accept=".kmz" required>
-          </label>
+{% block content %}
+  <section class="panel">
+    <h1>Corrector KMZ</h1>
+    <p class="lead">Sube un KMZ de rutas escolares y descarga el paquete corregido para revisarlo en Google Earth Pro.</p>
 
-          <label>
-            Plantilla Excel
-            <select id="route_excel_template" name="route_excel_template" required>
-              {% for template in route_excel_templates %}
-                <option value="{{ template.value }}" {% if template.value == selected_route_excel_template %}selected{% endif %}>{{ template.label }}</option>
-              {% endfor %}
-            </select>
-          </label>
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
 
-          <div id="bulk-template-fields">
-            <div class="form-grid">
-              <label>
-                Trip Type
-                <select name="bulk_trip_type" required>
-                  <option value="Pickup" {% if bulk_defaults.trip_type == 'Pickup' %}selected{% endif %}>Pickup</option>
-                  <option value="Drop" {% if bulk_defaults.trip_type == 'Drop' %}selected{% endif %}>Drop</option>
-                </select>
-              </label>
+    <form action="{{ url_for('process_upload') }}" method="post" enctype="multipart/form-data">
+      <label>
+        Archivo KMZ
+        <input type="file" name="kmz_file" accept=".kmz" required>
+      </label>
 
-              <label>
-                Consider Path
-                <select name="bulk_consider_path" required>
-                  <option value="Yes" {% if bulk_defaults.consider_path == 'Yes' %}selected{% endif %}>Yes</option>
-                  <option value="No" {% if bulk_defaults.consider_path == 'No' %}selected{% endif %}>No</option>
-                </select>
-              </label>
-
-              <label>
-                Valid From
-                <input type="text" name="bulk_valid_from" value="{{ bulk_defaults.valid_from }}" placeholder="dd-MM-yyyy" required>
-              </label>
-
-              <label>
-                Valid To
-                <input type="text" name="bulk_valid_to" value="{{ bulk_defaults.valid_to }}" placeholder="dd-MM-yyyy" required>
-              </label>
-
-              <label>
-                Pickup Time
-                <input type="text" name="bulk_pickup_time" value="{{ bulk_defaults.pickup_time }}" placeholder="HH:mm" required>
-              </label>
-
-              <label>
-                Drop Time
-                <input type="text" name="bulk_drop_time" value="{{ bulk_defaults.drop_time }}" placeholder="HH:mm" required>
-              </label>
-
-              <label>
-                Add As Address
-                <select name="bulk_add_as_address" required>
-                  <option value="No" {% if bulk_defaults.add_as_address == 'No' %}selected{% endif %}>No</option>
-                  <option value="Yes" {% if bulk_defaults.add_as_address == 'Yes' %}selected{% endif %}>Yes</option>
-                </select>
-              </label>
-
-              <label>
-                Valor dias activos
-                <input type="text" name="bulk_schedule_value" value="{{ bulk_defaults.schedule_value }}" required>
-              </label>
-            </div>
-
-            <fieldset class="days-field">
-              <legend>Schedule Days</legend>
-              {% for day in schedule_days %}
-                <label class="check-label">
-                  <input type="checkbox" name="schedule_days" value="{{ day }}" {% if day in bulk_defaults.schedule_days %}checked{% endif %}>
-                  {{ day }}
-                </label>
-              {% endfor %}
-            </fieldset>
-
-            <label>
-              Location
-              <input type="text" name="bulk_location" value="{{ bulk_defaults.location }}" placeholder="Si se deja vacio usa el distrito de la ruta">
-            </label>
-          </div>
-
-          <button type="submit">Procesar KMZ</button>
-        </form>
-      </section>
-    </main>
-    <script>
-      const templateSelect = document.querySelector("#route_excel_template");
-      const bulkFields = document.querySelector("#bulk-template-fields");
-
-      function syncTemplateFields() {
-        const isBulkTemplate = templateSelect.value === "bulk_create_trip";
-        bulkFields.hidden = !isBulkTemplate;
-        bulkFields.querySelectorAll("input, select").forEach((field) => {
-          field.disabled = !isBulkTemplate;
-        });
-      }
-
-      templateSelect.addEventListener("change", syncTemplateFields);
-      syncTemplateFields();
-    </script>
-  </body>
-</html>
+      <button type="submit">Procesar KMZ</button>
+    </form>
+  </section>
+{% endblock %}
