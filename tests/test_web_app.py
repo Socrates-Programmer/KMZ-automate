@@ -84,11 +84,12 @@ def test_uffizio_rejects_non_xlsx_upload():
 def test_uffizio_create_returns_download_link(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_create_uffizio_bulk_trip(source_path, output_path, trip_type=None, vehicles=None):
+    def fake_create_uffizio_bulk_trip(source_path, output_path, trip_type=None, vehicles=None, reverse_stops=False):
         captured["source_path"] = source_path
         captured["output_path"] = output_path
         captured["trip_type"] = trip_type
         captured["vehicles"] = vehicles
+        captured["reverse_stops"] = reverse_stops
         output_path.write_bytes(b"xlsx")
 
     monkeypatch.setattr(web_app, "create_uffizio_bulk_trip", fake_create_uffizio_bulk_trip)
@@ -103,6 +104,7 @@ def test_uffizio_create_returns_download_link(monkeypatch, tmp_path):
             "route_excel_file": (BytesIO(b"excel"), "001_Ruta #22_MC.xlsx"),
             "trip_type": "Drop",
             "vehicles": "vehicle 3",
+            "reverse_stops": "1",
         },
         content_type="multipart/form-data",
     )
@@ -113,3 +115,4 @@ def test_uffizio_create_returns_download_link(monkeypatch, tmp_path):
     assert captured["output_path"].name == "BulkCreateTrip_001_Ruta _22_MC.xlsx"
     assert captured["trip_type"] == "Drop"
     assert captured["vehicles"] == ["vehicle 3"]
+    assert captured["reverse_stops"] is True

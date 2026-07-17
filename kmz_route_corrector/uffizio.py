@@ -71,11 +71,14 @@ def create_uffizio_bulk_trip(
     today: date | None = None,
     trip_type: str | None = None,
     vehicles: list[str] | tuple[str, ...] | None = None,
+    reverse_stops: bool = False,
 ) -> Path:
     template = Path(template_path)
     stops = resolve_checkpoint_conflicts(read_route_stops(source_path))
     if not stops:
         raise ValueError("El archivo no contiene paradas validas para convertir.")
+    if reverse_stops:
+        stops = list(reversed(stops))
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -219,8 +222,8 @@ def build_uffizio_rows(
     vehicles: list[str] | tuple[str, ...] | None = None,
 ) -> list[list[str]]:
     valid_from = (today or date.today()).strftime("%d-%m-%Y")
-    pickup_times = interpolate_times("07:00", "08:00", len(stops))
-    drop_times = interpolate_times("12:50", "13:30", len(stops))
+    pickup_times = checkpoint_times("07:00", "08:00", len(stops))
+    drop_times = checkpoint_times("12:50", "13:30", len(stops))
     trip_type_value = trip_type or "Pickup"
     vehicle_values = list(vehicles or ["vehicle 2"])
     rows: list[list[str]] = []
@@ -462,6 +465,24 @@ def clean_station_name(value: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return clean_xlsx_text(cleaned)
 
+
+def checkpoint_times(start: str, end: str, count: int) -> list[str]:
+    times = interpolate_times(start, end, count)
+    if count <= 2:
+        return times
+
+    start_minutes = parse_hhmm(start)
+    end_minutes = parse_hhmm(end)
+    min_internal = start_minutes + 1
+    max_internal = end_minutes - 1
+    if min_internal > max_internal:
+        return times
+
+    adjusted = list(times)
+    for index in range(1, count - 1):
+        minutes = parse_hhmm(adjusted[index])
+        adjusted[index] = format_hhmm(min(max(minutes, min_internal), max_internal))
+    return adjusted
 
 def interpolate_times(start: str, end: str, count: int) -> list[str]:
     if count <= 0:

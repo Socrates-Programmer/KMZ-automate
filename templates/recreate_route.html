@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Re-crear ruta{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1>Re-crear ruta</h1>
+    <p class="lead">Sube un KMZ con rutas y genera solo las paradas/checkpoints necesarios para conservar el elevation profile y preparar Excel Uffizio.</p>
+
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('process_recreate_route') }}" method="post" enctype="multipart/form-data">
+      <label>
+        Archivo KMZ
+        <input type="file" name="kmz_file" accept=".kmz" required>
+      </label>
+
+      <div class="grid">
+        <label>
+          Tolerancia de ruta (metros)
+          <input type="number" name="simplification_tolerance_meters" min="1" step="1" value="{{ simplification_tolerance_meters or 80 }}">
+        </label>
+
+        <label>
+          Distancia minima entre paradas (metros)
+          <input type="number" name="min_stop_distance_meters" min="1" step="1" value="{{ min_stop_distance_meters or 200 }}">
+        </label>
+      </div>
+
+      <button type="submit">Re-crear ruta</button>
+    </form>
+  </section>
+{% endblock %}

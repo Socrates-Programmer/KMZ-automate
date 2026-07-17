@@ -12,6 +12,8 @@
         <a class="brand" href="{{ url_for('index') }}">Rutas escolares</a>
         <div class="nav-links">
           <a class="nav-link {% if active_page == 'kmz' %}active{% endif %}" href="{{ url_for('index') }}">Corrector KMZ</a>
+          <a class="nav-link {% if active_page == 'arrow_stops' %}active{% endif %}" href="{{ url_for('arrow_stops') }}">Flechas a paradas</a>
+          <a class="nav-link {% if active_page == 'recreate_route' %}active{% endif %}" href="{{ url_for('recreate_route') }}">Re-crear ruta</a>
           <a class="nav-link {% if active_page == 'uffizio' %}active{% endif %}" href="{{ url_for('uffizio') }}">Crear ruta Uffizio</a>
         </div>
       </nav>

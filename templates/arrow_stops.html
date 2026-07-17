@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Flechas a paradas{% endblock %}
+
+{% block content %}
+  <section class="panel">
+    <h1>Flechas a paradas</h1>
+    <p class="lead">Sube un KMZ y convierte los puntos con icono de flecha en paradas de bus, conservando sus nombres y coordenadas.</p>
+
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('process_arrow_stops') }}" method="post" enctype="multipart/form-data">
+      <label>
+        Archivo KMZ
+        <input type="file" name="kmz_file" accept=".kmz" required>
+      </label>
+
+      <label>
+        Radio para asociar rutas cercanas (metros)
+        <input type="number" name="route_match_radius_meters" min="1" step="1" value="{{ route_match_radius_meters or 2000 }}">
+      </label>
+
+      <button type="submit">Convertir flechas</button>
+    </form>
+  </section>
+{% endblock %}

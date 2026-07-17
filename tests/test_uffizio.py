@@ -180,3 +180,45 @@ def test_create_uffizio_bulk_trip_rejects_missing_source_headers(tmp_path):
 
     with pytest.raises(ValueError, match="Faltan columnas requeridas"):
         create_uffizio_bulk_trip(source, output)
+
+def test_create_uffizio_bulk_trip_keeps_many_internal_times_between_start_and_end(tmp_path):
+    source = tmp_path / "ruta_larga.xlsx"
+    output = tmp_path / "BulkCreateTrip.xlsx"
+    rows = [[f"P{index}", f"{18 + index * 0.001:.8f}", "-69.00000000"] for index in range(1, 357)]
+    write_source_route_excel(source, rows)
+
+    create_uffizio_bulk_trip(source, output, today=date(2026, 7, 16))
+
+    values, _, _, _ = output_sheet_values(output)
+    assert values["I4"] == "Start"
+    assert values["J4"] == "07:00"
+    assert values["I359"] == "End"
+    assert values["J359"] == "08:00"
+    assert values["I5"] == "P2"
+    assert values["J5"] == "07:01"
+    assert values["I6"] == "P3"
+    assert values["J6"] == "07:01"
+    assert values["I358"] == "P355"
+    assert values["J358"] == "07:59"
+
+def test_create_uffizio_bulk_trip_can_reverse_stop_order(tmp_path):
+    source = tmp_path / "ruta.xlsx"
+    output = tmp_path / "BulkCreateTrip.xlsx"
+    write_source_route_excel(
+        source,
+        [
+            ["P1", "18.10000000", "-69.10000000"],
+            ["P2", "18.20000000", "-69.20000000"],
+            ["P3", "18.30000000", "-69.30000000"],
+        ],
+    )
+
+    create_uffizio_bulk_trip(source, output, today=date(2026, 7, 16), reverse_stops=True)
+
+    values, _, _, _ = output_sheet_values(output)
+    assert values["G4"] == "18.30000000,-69.30000000"
+    assert values["I4"] == "Start"
+    assert values["G5"] == "18.20000000,-69.20000000"
+    assert values["I5"] == "P2"
+    assert values["G6"] == "18.10000000,-69.10000000"
+    assert values["I6"] == "End"
